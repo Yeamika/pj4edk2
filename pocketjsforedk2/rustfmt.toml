@@ -1,0 +1,2 @@
+# Keep declaration order stable for the generated public C header.
+reorder_modules = false

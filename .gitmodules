@@ -1,0 +1,3 @@
+[submodule "edk2-libc"]
+	path = edk2-libc
+	url = https://github.com/tianocore/edk2-libc.git
