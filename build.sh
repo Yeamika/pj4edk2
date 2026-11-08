@@ -50,9 +50,9 @@ if [[ -n $rust_build ]]; then
   python3 "$repo/tools/rust-bundle.py" verify "$repo" "$rust_build" --default-ui "$PJB_DEFAULT_UI"
   export PJB_RUST_ARCHIVE="$rust_build/Rust.a" PJB_QUICKJS="$rust_build/quickjs"
 else
-  cargo fetch --locked --manifest-path "$repo/reference/pocketjs-uefi-platform/Cargo.toml"
+  cargo fetch --locked --manifest-path "$repo/uefi-runtime/Cargo.toml"
 fi
-bash "$repo/reference/pocketjs-uefi-platform/tools/build-components.sh"
+bash "$repo/uefi-runtime/tools/build-components.sh"
 python3 - "$repo" "$PJB_BUILD_DIR" "$PJB_DEFAULT_UI" <<'PY'
 import hashlib, json, pathlib, runpy, sys
 repo, out, ui = map(pathlib.Path, sys.argv[1:])

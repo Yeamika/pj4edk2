@@ -34,15 +34,14 @@ GUID 为 `6988824e-3b93-4bd4-bf07-65517b0f906d`。生产者通过 `InstallConfig
 最终内存映射之前完成停止、撤表与需要的资源清理。成功 `ExitBootServices` 后不再调用原入口或 Boot
 Services，即使原物理字节仍存在。 跨内核阶段继续运行需要另外定义代码、堆和驱动的寿命。
 
-验证方法见[接入与验证](getting-started.md)。完整的既有协议语义保存在[协议专题](../../reference/pocketjs-uefi-handoff/docs/uefi-handoff.md)，其语义变更需与本工程同步；该专题不是另一份结构定义。
+验证方法见[接入与验证](getting-started.md)。完整的既有协议语义保存在[协议专题](../../docs/uefi-handoff.md)，其语义变更需与本工程同步；该专题不是另一份结构定义。
 
 ## 可选充电控制
 
-`ChargeControlProtocol` 使用独立 GUID `69f253de-281e-4aca-a788-8c27cec41710`，
-不改变既有 `PlatformProtocol` revision 1。两个回调读写 0/1 使能值，遵循
-Boot Services 生命周期、TPL_APPLICATION 单调用方约定。读数指充电通路的硬件使能，
-与电池实际 Charging/Discharging 状态分开；错误时视为未知，写成功要求硬件读回。
-板级实现决定能否开启、异常停充和交接策略。调用者不能把开关当作 PD 协商、快充或电池旁路。
+`ChargeControlProtocol` 使用独立 GUID `69f253de-281e-4aca-a788-8c27cec41710`， 不改变既有
+`PlatformProtocol` revision 1。两个回调读写 0/1 使能值，遵循 Boot Services
+生命周期、TPL_APPLICATION 单调用方约定。读数指充电通路的硬件使能， 与电池实际 Charging/Discharging
+状态分开；错误时视为未知，写成功要求硬件读回。 板级实现决定能否开启、异常停充和交接策略。调用者不能把开关当作 PD 协商、快充或电池旁路。
 
 页面通过 `SetChargingEnabled` 请求，宿主回 `ChargeConfigured` 并定期发布 `ChargeState`；
 未发布协议的平台隐藏控件。充电请求不写入 BootSettings，不随重启自动恢复。

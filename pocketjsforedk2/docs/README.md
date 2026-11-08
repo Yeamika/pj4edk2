@@ -7,4 +7,4 @@
 | [宿主服务](services.md)          | 启动项、配置、参数、运行时借用、显示区域和事件 |
 | [职责边界](boundaries.md)        | 接口、参考实现及平台之间的维护分工             |
 
-实现记录和历史产物从[参考工程](../../reference/README.md)进入。
+实现组成见[运行时说明](../../docs/runtime-overview.md)，当前构建与验证见[仓库入口](../../README.md)。

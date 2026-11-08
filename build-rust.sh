@@ -27,8 +27,8 @@ for input in "$repo" "$PJB_DEFAULT_UI"; do
   case "$CARGO_TARGET_DIR/" in "$input/"*) echo 'CARGO_TARGET_DIR must be outside the source and UI directories' >&2; exit 2;; esac
 done
 export PJB_ARCHIVE="$output/Rust.a"
-cargo fetch --locked --manifest-path "$repo/reference/pocketjs-uefi-platform/Cargo.toml"
-bash "$repo/reference/pocketjs-uefi-platform/tools/build-staticlib.sh"
+cargo fetch --locked --manifest-path "$repo/uefi-runtime/Cargo.toml"
+bash "$repo/uefi-runtime/tools/build-staticlib.sh"
 quickjs=$(find "$CARGO_HOME/registry/src" -maxdepth 3 -type d -path '*/rquickjs-sys-0.12.2/quickjs' -print -quit)
 test -n "$quickjs"
 cp -R -- "$quickjs" "$output/quickjs"

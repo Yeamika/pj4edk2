@@ -89,7 +89,7 @@ class UiInputsTest(unittest.TestCase):
         (consumer/'Cargo.toml').write_text(
             '[package]\nname="ui-input-check"\nversion="0.1.0"\nedition="2024"\n'
             '[dependencies]\npocketjs-boot-ui={path=' + json.dumps(str(REPO/'default-ui')) + '}\n'
-            'pocketjs-boot-assets={path=' + json.dumps(str(REPO/'reference/crates/boot-assets')) + '}\n')
+            'pocketjs-boot-assets={path=' + json.dumps(str(REPO/'crates/boot-assets')) + '}\n')
         (consumer/'src/main.rs').write_text('''
 fn main() {
     let font = pocketjs_boot_assets::atlases(false).into_iter().flatten()

@@ -41,5 +41,5 @@ TMPDIR=/tmp/pocketjs-interface-check /tmp/pocketjs-interface-check/verify . --na
 
 ## 参考实现回归
 
-抽象接口变更后，在独立的 `reference` 工程运行对应调用方回归。引擎、C
-guest、渲染和设备测试使用各自的工具链及依赖，不进入接口工程。
+抽象接口变更后，按[仓库测试入口](../../README.md#%E6%B5%8B%E8%AF%95)运行 `uefi-runtime` 和
+`crates` 的调用方回归。 引擎、C guest、渲染和设备测试使用各自的工具链及依赖，不进入接口工程。

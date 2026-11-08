@@ -1,0 +1,38 @@
+[package]
+name = "pocketjs-uefi-runtime"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+publish = false
+
+[workspace]
+
+[features]
+# Explicit RAM diagnostic; writes test settings through the real page and host.
+settings-self-test = []
+charge-self-test = []
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+pocketjs-boot-context-abi = { path = "../pocketjsforedk2" }
+pocketjs-boot-assets = { path = "../crates/boot-assets" }
+pocketjs-embedded-runtime = { path = "../crates/embedded-runtime" }
+pocketjs-boot-ui = { path = "../default-ui" }
+pocketjs-core = { path = "../vendor/pocketjs/engine/core" }
+r-efi = "5"
+libm = "0.2"
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+rquickjs-sys = { version = "=0.12.2", default-features = false }
+
+[profile.release]
+opt-level = 2
+lto = false
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+panic = "abort"

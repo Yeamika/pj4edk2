@@ -2,7 +2,7 @@
   "schema": 1,
   "runtime_source": "uefi-controls-20261105, changed files verified against source-final.tar",
   "rust": "1.93.0",
-  "quickjs": "rquickjs-sys 0.12.2, pinned by reference/pocketjs-uefi-platform/Cargo.lock",
+  "quickjs": "rquickjs-sys 0.12.2, pinned by uefi-runtime/Cargo.lock",
   "dependencies": {
     "edk2": {
       "repository": "https://github.com/tianocore/edk2.git",
@@ -16,7 +16,7 @@
     "pocketjs": {
       "repository": "https://github.com/pocket-nexus/pocketjs",
       "commit": "e6770376626a4de5c93eaa6fb048e7e9ffb81f9f",
-      "path": "reference/vendor/pocketjs",
+      "path": "vendor/pocketjs",
       "verification": "197 upstream files verified; workspace manifest is trimmed for used crates"
     }
   }

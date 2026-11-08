@@ -6,7 +6,7 @@ rust-version = "1.85"
 publish = false
 
 [dependencies]
-pocketjs-debug-channel = { path = "../reference/pocketjs-uefi-handoff/crates/debug-channel" }
+pocketjs-debug-channel = { path = "../crates/debug-channel" }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 

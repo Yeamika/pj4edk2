@@ -14,10 +14,10 @@ def sha(path):
 
 def sources(repo):
     result = {}
-    for name in ('pocketjsforedk2', 'default-ui', 'reference'):
+    for name in ('pocketjsforedk2', 'default-ui', 'uefi-runtime', 'crates', 'vendor'):
         for p in sorted((repo/name).rglob('*')):
             if (p.is_file() and p.suffix not in ('.md', '.py')
-                    and not any(part in ('.git', 'target', '__pycache__') for part in p.parts)):
+                    and not any(part in ('.git', 'target', '__pycache__') for part in p.relative_to(repo).parts)):
                 result[str(p.relative_to(repo))] = sha(p)
     result['tools/ui-input.rs'] = sha(repo/'tools/ui-input.rs')
     return result

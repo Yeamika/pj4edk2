@@ -30,8 +30,8 @@ pocketjsforedk2/
 
 从[接入与验证](docs/getting-started.md)开始。协议语义见[EFI ABI](docs/abi.md)与[宿主服务](docs/services.md)，项目职责见[边界说明](docs/boundaries.md)。
 
-本组件位于 `pj4edk2` 仓库内。默认页面 `default-ui` 和运行时 `reference` 通过路径依赖使用这里定义的类型。
-板级固件、硬件驱动和设备验收由对应平台工程维护。
+本组件位于 `pj4edk2` 仓库内。默认页面 `default-ui`、UEFI 宿主 `uefi-runtime` 和通用库 `crates`
+通过路径依赖使用这里定义的类型。 板级固件、硬件驱动和设备验收由对应平台工程维护。
 
 ## 当前状态
 

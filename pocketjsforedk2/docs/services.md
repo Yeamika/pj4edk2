@@ -27,14 +27,13 @@ framebuffer 格式或设备句柄。
 `UiEvent` 描述指针、按键、滚轮、电量和宿主结果；`UiAction` 描述启动、保存、默认项、调试和恢复请求。 未知电量使用
 `None`，不填入模拟百分比。调试默认关闭且只响应用户显式选择的行为由实现验证；接口本身不创建队列、串口或网络连接。
 
-`RecoveryResult { operation, success, lines, settings }` 回应同名恢复操作。
-`lines` 是宿主观测到的结果文本；`settings` 仅在持久恢复成功且读回验证后提供。
-页面按操作名匹配等待中的请求，失败时不更新设置。宿主不支持的操作也应回传失败结果，
-避免页面一直等待；此事件本身不执行存储修复或启动其他系统。
+`RecoveryResult { operation, success, lines, settings }` 回应同名恢复操作。 `lines`
+是宿主观测到的结果文本；`settings` 仅在持久恢复成功且读回验证后提供。
+页面按操作名匹配等待中的请求，失败时不更新设置。宿主不支持的操作也应回传失败结果， 避免页面一直等待；此事件本身不执行存储修复或启动其他系统。
 
-`BootFailed { status }`（JSON `boot_failed`）用于宿主向重新建立的菜单报告启动失败，
-`status` 为可显示的结果文本。参考页面显示错误并取消本次自动启动，不改写持久设置；
-诊断应用成功返回不发送此失败事件。是否重建页面、恢复硬件以及启动 EFI 应用由宿主实现。
+`BootFailed { status }`（JSON `boot_failed`）用于宿主向重新建立的菜单报告启动失败， `status`
+为可显示的结果文本。参考页面显示错误并取消本次自动启动，不改写持久设置； 诊断应用成功返回不发送此失败事件。是否重建页面、恢复硬件以及启动 EFI
+应用由宿主实现。
 
 `UiConfig`、`BootSettings` 不提供产品默认值。调用方显式配置；参考页面的旧预设改从
 `pocketjs_boot_ui::default_config()` 和 `default_settings()` 获取。 参考 `boot-ui`

@@ -1,0 +1,22 @@
+[package]
+name = "pocketjs-embedded-runtime"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+publish = false
+
+[dependencies]
+pocketjs-debug-channel = { path = "../debug-channel" }
+pocket-runtime = { path = "../../vendor/pocketjs/engine/runtime" }
+pocket-runtime-cabi = { path = "../../vendor/pocketjs/engine/runtime-cabi", default-features = false, features = ["external-runtime"] }
+pocketjs-core = { path = "../../vendor/pocketjs/engine/core" }
+pocket-drivers = { path = "../../vendor/pocketjs/engine/drivers" }
+pocket-raster = { path = "../../vendor/pocketjs/engine/raster" }
+pocket-present = { path = "../../vendor/pocketjs/engine/present" }
+pocket-spec = { path = "../../vendor/pocketjs/engine/spec" }
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+rquickjs-sys = { version = "=0.12.2", default-features = false }
