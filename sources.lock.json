@@ -6,8 +6,7 @@
   "dependencies": {
     "edk2": {
       "repository": "https://github.com/tianocore/edk2.git",
-      "commit": "e7aac7fc137e247edad22f7ee53b9a1fba227397",
-      "provided_by": "edk2-ums9620/edk2"
+      "commit": "e7aac7fc137e247edad22f7ee53b9a1fba227397"
     },
     "edk2-libc": {
       "repository": "https://github.com/tianocore/edk2-libc.git",

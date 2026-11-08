@@ -1,22 +1,24 @@
 # PocketJS UEFI runtime
 
 This directory implements the ARM64 EFI host for the shared interfaces and
-default pages. Board drivers, boot targets and firmware packaging belong to
-`edk2-ums9620` and `w202ds-boot`. No board checkout or page snapshot is kept
-here.
+default pages. It uses generic EDK II and standard UEFI protocols. Board
+drivers, boot targets and firmware packaging belong to the consuming platform
+project. No board repository is required to build this runtime.
 
 ## Build independent components
 
 `tools/build-components.sh` builds `PocketJS.a` containing the Rust engine
 adapter/pages, official C guest, QuickJS and EFI host
-entry/chainload/time/settings glue. It also exports `abi-support/`: the pinned
+entry/chainload/time/settings glue. It also exports `abi-support/`: the selected
 EDK II/edk2-libc libraries and generated constructors required to link the
 application. Board JSON is compiled separately by the SDK producer.
 
-The repository root `build.sh` supplies these inputs. For direct low-level use:
+The repository root `build.sh` fetches generic EDK II and builds private
+BaseTools by default. `--edk2 DIR` accepts a caller-selected EDK II checkout.
+For direct low-level use:
 
 ```sh
-export PJB_EDK2_ROOT=/path/to/pinned/edk2
+export PJB_EDK2_ROOT=/path/to/generic/edk2
 export PJB_EDK2_LIBC=/path/to/pinned/edk2-libc
 export EDK_TOOLS_PATH=/path/to/built/BaseTools
 export PJB_BUILD_DIR=/path/to/private/work
@@ -30,6 +32,8 @@ panic and disable LTO/sanitizers. The lower-level `build-staticlib.sh` emits
 only the Rust portion; it is not a complete runtime delivery. `prepare-edk2.py`
 generates an isolated work package; it does not modify upstream source.
 
+The consuming project checks that these ABI libraries and its platform were
+built with the same EDK II revision. For example,
 `w202ds-boot/tools/edk2_sdk.py export` combines platform FFS modules, the ABI
 support libraries and board configuration into a pinned SDK. `edk2_sdk.py link`
 then links the independent runtime archive and assembles the firmware volumes.

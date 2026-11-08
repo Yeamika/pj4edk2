@@ -2,7 +2,7 @@
 # Produce the independent runtime archive and its matching UEFI ABI libraries.
 set -euo pipefail
 repo=$(cd -- "$(dirname -- "$0")" && pwd -P)
-edk2="$repo/../edk2-ums9620/edk2"
+edk2=
 output= rust_build= default_ui=${PJB_DEFAULT_UI:-$repo/default-ui}
 source_args=()
 while (($#)); do
@@ -12,45 +12,46 @@ while (($#)); do
     --rust-build) rust_build=${2:?}; shift 2;;
     --default-ui) default_ui=${2:?}; shift 2;;
     --source-lock|--source-cache|--source-repo|--source-ref) source_args+=("$1" "${2:?}"); shift 2;;
-    --help|-h) echo 'Usage: build.sh --output DIR [--default-ui DIR] [--edk2 EDK2_CHECKOUT] [--rust-build DIR] [--source-cache DIR] [--source-lock FILE] [--source-repo NAME=URL] [--source-ref NAME=COMMIT|BRANCH|TAG|latest] (set EDK_TOOLS_PATH)'; exit 0;;
+    --help|-h) echo 'Usage: build.sh --output DIR [--default-ui DIR] [--edk2 GENERIC_EDK2_CHECKOUT] [--rust-build DIR] [--source-cache DIR] [--source-lock FILE] [--source-repo NAME=URL] [--source-ref NAME=COMMIT|BRANCH|TAG|latest] (fetches pinned EDK II and builds BaseTools unless supplied)'; exit 0;;
     *) echo "Unknown option: $1" >&2; exit 2;;
   esac
 done
 : "${output:?pass --output}"
+if [[ -n $edk2 ]]; then edk2=$(realpath -e "$edk2"); fi
 PJB_DEFAULT_UI=$(realpath -e "$default_ui")
 export PJB_DEFAULT_UI
 python3 "$repo/tools/ui-input.py" "$PJB_DEFAULT_UI"
-: "${EDK_TOOLS_PATH:?set EDK_TOOLS_PATH to compiled BaseTools}"
-PJB_EDK2_ROOT=$(realpath -e "$edk2")
-export PJB_EDK2_ROOT
 PJB_BUILD_DIR=$(realpath -m "$output")
 export PJB_BUILD_DIR
 case "$PJB_BUILD_DIR/" in "$repo/"*) echo 'Output must be outside the source tree' >&2; exit 2;; esac
 case "$PJB_BUILD_DIR/" in "$PJB_DEFAULT_UI/"*) echo 'Output must be outside the UI directory' >&2; exit 2;; esac
+if [[ -n $edk2 ]]; then
+  case "$PJB_BUILD_DIR/" in "$edk2/"*) echo 'Output must be outside the EDK II directory' >&2; exit 2;; esac
+fi
 test ! -e "$PJB_BUILD_DIR/abi-support" || { echo 'Choose a fresh output directory' >&2; exit 2; }
 export PJB_ARCHIVE="$PJB_BUILD_DIR/PocketJS.a"
 CARGO_TARGET_DIR=$(realpath -m "${CARGO_TARGET_DIR:-$PJB_BUILD_DIR/cargo-target}")
 export CARGO_TARGET_DIR
-for input in "$repo" "$PJB_DEFAULT_UI"; do
+for input in "$repo" "$PJB_DEFAULT_UI" ${edk2:+"$edk2"}; do
   case "$CARGO_TARGET_DIR/" in "$input/"*) echo 'CARGO_TARGET_DIR must be outside the source and UI directories' >&2; exit 2;; esac
 done
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 export RUSTUP_TOOLCHAIN=1.93.0
-python3 - "$repo" "$PJB_EDK2_ROOT" <<'PY'
-import json, pathlib, subprocess, sys
-repo = pathlib.Path(sys.argv[1])
-lock = json.loads((repo/'sources.lock.json').read_text())
-for name, path in [('edk2', pathlib.Path(sys.argv[2]))]:
-    actual = subprocess.check_output(['git', '-C', str(path), 'rev-parse', 'HEAD'], text=True).strip()
-    if actual != lock['dependencies'][name]['commit']:
-        raise SystemExit(f'{name}: incompatible checkout {actual}')
-PY
 mkdir -p -- "$PJB_BUILD_DIR"
-python3 "$repo/tools/upstream.py" prepare --output "$PJB_BUILD_DIR" "${source_args[@]}"
+edk2_args=(--with-edk2)
+if [[ -n $edk2 ]]; then edk2_args=(--edk2 "$edk2"); fi
+python3 "$repo/tools/upstream.py" prepare --output "$PJB_BUILD_DIR" "${edk2_args[@]}" "${source_args[@]}"
 build_repo=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_tree"])' "$PJB_BUILD_DIR/source-paths.json")
+PJB_EDK2_ROOT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["edk2"])' "$PJB_BUILD_DIR/source-paths.json")
 PJB_EDK2_LIBC=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["edk2-libc"])' "$PJB_BUILD_DIR/source-paths.json")
 PJB_QUICKJS=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["quickjs"])' "$PJB_BUILD_DIR/source-paths.json")
-export PJB_EDK2_LIBC PJB_QUICKJS
+export PJB_EDK2_ROOT PJB_EDK2_LIBC PJB_QUICKJS
+if [[ -z ${EDK_TOOLS_PATH:-} ]]; then
+  python3 "$repo/tools/build-basetools.py" --edk2 "$PJB_EDK2_ROOT" --output "$PJB_BUILD_DIR/basetools"
+  EDK_TOOLS_PATH="$PJB_BUILD_DIR/basetools"
+fi
+EDK_TOOLS_PATH=$(realpath -e "$EDK_TOOLS_PATH")
+export EDK_TOOLS_PATH
 export PJB_UPSTREAM_LOCK="$PJB_BUILD_DIR/upstream.lock.json"
 if [[ -n $rust_build ]]; then
   rust_build=$(realpath "$rust_build")

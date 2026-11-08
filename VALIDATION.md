@@ -95,3 +95,27 @@ schema 3 的 `rust-build.json`、`runtime-build.json` 和最终固件清单记�
 对应 `w202ds.fd` SHA-256 为
 `18a92a1f45085497832d82de1a22dcf21702c933bf44f9a2f85062635e6c755f`。
 本次未刷写或新增真机验证。
+
+## 2026-11-08 通用 EDK II 独立构建验证
+
+移除对板级仓库的默认路径和固定版本约束。在只有 `pj4edk2` 的独立目录中构建， 未传入 `--edk2`，也未设置
+`EDK_TOOLS_PATH`；通用 EDK II、私有 BaseTools、 完整 `PocketJS.a` 和 ABI
+支持库均成功生成。实际源码路径不包含板级仓库。
+
+- 16 项源码选择与 UI 集成测试通过，覆盖通用 EDK II 获取、外部 checkout 的不同提交、 两个 Brotli 浅克隆、固定
+  gitlink、缓存修改拒绝及 Rust 阶段不下载 EDK II。
+- Rust 编译机使用隔离的 Rust 1.93.0 完成 AArch64 构建；传回的源码身份、UI、 QuickJS 和归档哈希校验通过，原有默认
+  Rust 1.99.0 保持。
+- EDK II 和第一份 Brotli 从上游下载；第二份 Brotli 下载连接停滞后， 复用本轮已下载的相同 Git 对象。两个子模块均核对为 EDK
+  II 指定的 `f4153a09f87cbb9c826d8fc12c74642bb2d879ea`。
+- 使用独立 EDK II 头文件完成 3 项 UEFI C 适配测试。
+- 独立构建的运行时与 BaseTools 交给 `w202ds-boot` 后，平台版本校验、最终链接、 RAMBoot 和 5 MiB LK
+  容器封装全部通过。
+
+独立 `PocketJS.a` SHA-256：
+
+```text
+70d4d034d9c1c5ea22e29b5501f038b7d689b6dda374521a669aebb6cdfd08a1
+```
+
+本次验证默认固定版本和 AArch64 构建，未验证其他 EDK II 版本或 CPU 架构的完整兼容性，未刷写设备。
