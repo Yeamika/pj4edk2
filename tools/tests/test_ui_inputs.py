@@ -70,8 +70,11 @@ class UiInputsTest(unittest.TestCase):
         bundle = self.root/'bundle'
         bundle.mkdir()
         (bundle/'Rust.a').write_bytes(b'test-archive')
+        (bundle/'Cargo.lock').write_text('test-lock')
+        (bundle/'upstream.lock.json').write_bytes((REPO/'sources.lock.json').read_bytes())
         record = dict(API['identity'](REPO, self.ui),
-                      files={'Rust.a': API['sha'](bundle/'Rust.a')},
+                      files={name: API['sha'](bundle/name) for name in
+                             ('Rust.a', 'Cargo.lock', 'upstream.lock.json')},
                       rustc='rustc 1.93.0 (254b59607 2026-01-19)')
         (bundle/'rust-build.json').write_text(json.dumps(record))
         command = [sys.executable, str(REPO/'tools/rust-bundle.py'), 'verify', str(REPO),
@@ -81,6 +84,27 @@ class UiInputsTest(unittest.TestCase):
         failed = subprocess.run(command, capture_output=True, text=True)
         self.assertNotEqual(failed.returncode, 0)
         self.assertIn('default_ui differs', failed.stderr)
+
+    def test_bundle_rejects_different_upstream(self):
+        bundle = self.root/'bundle'
+        bundle.mkdir()
+        for name in ('Rust.a', 'Cargo.lock'):
+            (bundle/name).write_bytes(b'fixture')
+        (bundle/'upstream.lock.json').write_bytes((REPO/'sources.lock.json').read_bytes())
+        record = dict(API['identity'](REPO, self.ui),
+                      files={name: API['sha'](bundle/name) for name in
+                             ('Rust.a', 'Cargo.lock', 'upstream.lock.json')},
+                      rustc='rustc 1.93.0 (254b59607 2026-01-19)')
+        (bundle/'rust-build.json').write_text(json.dumps(record))
+        selection = json.loads((bundle/'upstream.lock.json').read_text())
+        selection['dependencies']['pocketjs']['commit'] = 'f'*40
+        selected = self.root/'another-upstream.json'
+        selected.write_text(json.dumps(selection))
+        result = subprocess.run([sys.executable, str(REPO/'tools/rust-bundle.py'), 'verify',
+                                 str(REPO), str(bundle), '--default-ui', str(self.ui),
+                                 '--source-lock', str(selected)], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('upstream selection differs', result.stderr)
 
     @unittest.skipUnless(os.environ.get('PJB_RUN_CARGO_TESTS') == '1', 'set PJB_RUN_CARGO_TESTS=1 for Cargo builds')
     def test_cargo_rebuilds_scripts_font_and_directory_selection(self):

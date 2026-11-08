@@ -3,11 +3,13 @@
 set -euo pipefail
 repo=$(cd -- "$(dirname -- "$0")" && pwd -P)
 output= default_ui=${PJB_DEFAULT_UI:-$repo/default-ui}
+source_args=()
 while (($#)); do
   case "$1" in
     --output) output=${2:?}; shift 2;;
     --default-ui) default_ui=${2:?}; shift 2;;
-    --help|-h) echo 'Usage: build-rust.sh --output DIR [--default-ui DIR] (legacy: build-rust.sh DIR)'; exit 0;;
+    --source-lock|--source-cache|--source-repo|--source-ref) source_args+=("$1" "${2:?}"); shift 2;;
+    --help|-h) echo 'Usage: build-rust.sh --output DIR [--default-ui DIR] [--source-cache DIR] [--source-lock FILE] [--source-repo NAME=URL] [--source-ref NAME=COMMIT|BRANCH|TAG|latest] (legacy: build-rust.sh DIR)'; exit 0;;
     -*) echo "Unknown option: $1" >&2; exit 2;;
     *) test -z "$output" || { echo 'Output specified more than once' >&2; exit 2; }; output=$1; shift;;
   esac
@@ -27,9 +29,16 @@ for input in "$repo" "$PJB_DEFAULT_UI"; do
   case "$CARGO_TARGET_DIR/" in "$input/"*) echo 'CARGO_TARGET_DIR must be outside the source and UI directories' >&2; exit 2;; esac
 done
 export PJB_ARCHIVE="$output/Rust.a"
-cargo fetch --locked --manifest-path "$repo/uefi-runtime/Cargo.toml"
-bash "$repo/uefi-runtime/tools/build-staticlib.sh"
-quickjs=$(find "$CARGO_HOME/registry/src" -maxdepth 3 -type d -path '*/rquickjs-sys-0.12.2/quickjs' -print -quit)
-test -n "$quickjs"
-cp -R -- "$quickjs" "$output/quickjs"
-python3 "$repo/tools/rust-bundle.py" create "$repo" "$output" --default-ui "$PJB_DEFAULT_UI"
+python3 "$repo/tools/upstream.py" prepare --output "$output" "${source_args[@]}"
+build_repo=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_tree"])' "$output/source-paths.json")
+quickjs=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["quickjs"])' "$output/source-paths.json")
+# Cargo may update the private lock when an explicitly selected upstream changes
+# its dependency graph. The source checkout and committed lock remain untouched.
+cargo fetch --manifest-path "$build_repo/uefi-runtime/Cargo.toml"
+bash "$build_repo/uefi-runtime/tools/build-staticlib.sh"
+cp -- "$build_repo/uefi-runtime/Cargo.lock" "$output/Cargo.lock"
+python3 - "$quickjs" "$output/quickjs" <<'PY'
+import shutil, sys
+shutil.copytree(sys.argv[1], sys.argv[2], ignore=shutil.ignore_patterns('.git'))
+PY
+python3 "$repo/tools/rust-bundle.py" create "$repo" "$output" --default-ui "$PJB_DEFAULT_UI" --source-lock "$output/upstream.lock.json"

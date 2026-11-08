@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Prepare an EDK II app with the official guest and edk2-libc, no Linux libc."""
-import argparse, hashlib, json, shutil, subprocess
+import argparse, hashlib, json, os, shutil, subprocess
 from pathlib import Path
 
 p=argparse.ArgumentParser()
@@ -173,9 +173,11 @@ dsc+='''
   PocketJsPkg/PocketJs.inf
 '''
 (pkg/'PocketJs.dsc').write_text(dsc)
+upstream_lock=json.loads(Path(os.environ['PJB_UPSTREAM_LOCK']).read_text())
 manifest={'edk2':subprocess.check_output(['git','-C',str(edk),'rev-parse','HEAD'],text=True).strip(),
  'edk2Libc':subprocess.check_output(['git','-C',str(libc),'rev-parse','HEAD'],text=True).strip(),
- 'pocketjs':'e6770376626a4de5c93eaa6fb048e7e9ffb81f9f',
+ 'pocketjs':upstream_lock['dependencies']['pocketjs']['commit'],
+ 'upstream':upstream_lock,
  'rustArchiveSha256':hashlib.sha256(a.archive.read_bytes()).hexdigest(),
  'quickjsSources':{f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in a.quickjs.iterdir() if f.is_file()}}
 (a.output/'source-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')

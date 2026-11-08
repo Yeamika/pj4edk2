@@ -13,9 +13,9 @@
 | `crates/embedded-runtime/` | 通用嵌入式执行层：JS 实例、页面上下文、输入和渲染适配                 |
 | `crates/debug-channel/`    | 有界调试消息队列                                                      |
 | `crates/boot-assets/`      | 字体图集等共享资源的构建                                              |
-| `vendor/pocketjs/`         | 固定上游引擎快照，保留上游许可和文件哈希；引擎源码未作本板修改        |
+| `vendor/pocketjs/`         | 供直接 Cargo 接入及历史核对的固定快照；构建脚本使用下载的上游源码     |
 | `docs/`                    | 模块、接入说明及跨 EFI 实例交接等设计文档                             |
-| `edk2-libc/`               | 固定版本的 Tianocore C 库子模块                                       |
+| `edk2-libc/`               | 保留的固定版本子模块；构建脚本从选定上游下载 C 库                     |
 
 版本固定在 [sources.lock.json](sources.lock.json)、各 `Cargo.lock` 和
 `rust-toolchain.toml`。上游引擎文件校验表位于 `vendor/UPSTREAM.json`。接口只在 `pocketjsforedk2`
@@ -26,18 +26,32 @@ UEFI 宿主包名为 `pocketjs-uefi-runtime`，通用执行层包名为 `pocketj
 
 ## 构建
 
-需要 Rust 1.93.0（含 `rust-src` 和 `aarch64-unknown-none`）、Cargo、Python 3.11+、AArch64
-GNU GCC/binutils，以及和平台一致的 EDK II 与 BaseTools。Rust 构建保留 `x18`，使用
+需要 Git、Rust 1.93.0（含 `rust-src` 和 `aarch64-unknown-none`）、Cargo、Python
+3.11+、AArch64 GNU GCC/binutils，以及和平台一致的 EDK II 与 BaseTools。Rust 构建保留 `x18`，使用
 `panic=abort`，不启用 LTO。
 
 ```sh
-git submodule update --init edk2-libc
 export EDK_TOOLS_PATH=/path/to/build/basetools
 ./build.sh --edk2 ../edk2-ums9620/edk2 --output /path/to/build/pocketjs
 ```
 
 BaseTools 可以用 `../edk2-ums9620/build-tools.sh /path/to/build/basetools`
 生成。构建输出必须位于源码树外；Cargo 缓存使用正常的 `CARGO_HOME`，目标文件默认放在输出目录。
+
+构建脚本自动获取 `edk2-libc`、PocketJS、QuickJS-NG 的上游 Git 源码，默认使用 `sources.lock.json`
+中的固定提交。可以单独选择仓库、提交、标签、分支或最新提交：
+
+```sh
+./build.sh --edk2 ../edk2-ums9620/edk2 --output /path/to/build/pocketjs \
+  --source-cache /path/to/cache/upstream \
+  --source-ref pocketjs=latest \
+  --source-repo quickjs=https://github.com/quickjs-ng/quickjs.git \
+  --source-ref quickjs=fd0a0210b7be00957751871e7e01b8291268fc29
+```
+
+`latest` 指所选仓库默认分支的 HEAD；分支和标签每次重新解析。构建把实际提交写入 `upstream.lock.json`，下次用
+`--source-lock /path/to/build/upstream.lock.json` 重放。 这些选项同样适用于 `build-rust.sh`
+和 `w202ds-boot/build.py`。 具体用法、缓存和编译机分工见 [上游源码选择](docs/upstream-sources.md)。
 
 其他项目可以传入自己的默认 UI 目录和输出目录：
 
@@ -63,6 +77,8 @@ JS 源码和字体图集仍然在构建时嵌入 `PocketJS.a`。UI 路径、清�
 | `abi-support/`                  | 与这次构建匹配的 EDK II / libc 库、入口对象、链接脚本和哈希清单 |
 | `packages/source-manifest.json` | 编译所用 QuickJS、引擎及 EDK II 版本信息                        |
 | `runtime-build.json`            | 源码、所选 UI 输入及最终归档的对应哈希                          |
+| `upstream.lock.json`            | 三个上游仓库及这次实际使用的完整提交                            |
+| `Cargo.lock`                    | 所选源码实际使用的 Rust 依赖锁                                  |
 
 `PocketJS.a` 交给 `w202ds-boot` 链接进平台 FD；它本身不是可刷写镜像。板级菜单 JSON
 不固化在这个独立归档中，而由最终链接阶段提供。
@@ -75,16 +91,17 @@ JS 源码和字体图集仍然在构建时嵌入 `PocketJS.a`。UI 路径、清�
 # 编译机：使用同一份 pj4edk2 源码和 UI 文件
 ./build-rust.sh --default-ui /path/to/my-project/ui --output /path/to/build/rust
 
-# 传回 Rust.a、quickjs/、rust-build.json，保留目录结构
+# 传回 Rust.a、quickjs/、Cargo.lock、upstream.lock.json、rust-build.json
 # 本地主机：不需要本地安装 Rust
 ./build.sh --edk2 ../edk2-ums9620/edk2 \
   --default-ui /path/to/my-project/ui \
+  --source-lock /path/to/received/rust/upstream.lock.json \
   --rust-build /path/to/received/rust --output /path/to/build/pocketjs
 ```
 
 接收端会校验 Rust 版本、构建源码、所选 UI 和所有传回文件的哈希。两端 UI 的绝对路径可以不同， 清单和输入文件内容必须一致；缺文件或 UI
-不匹配会拒绝构建。旧版 schema 1 构建清单需要重新构建。 `build-rust.sh OUTPUT_DIRECTORY`
-的旧调用方式仍可用。默认页面和字体的许可证随对应源码保留。
+不匹配会拒绝构建。schema 3 同时校验选定上游和 QuickJS 源码；旧版归档需要重新构建。
+`build-rust.sh OUTPUT_DIRECTORY` 的旧调用方式仍可用。默认页面和字体的许可证随对应源码保留。
 
 ## 测试
 

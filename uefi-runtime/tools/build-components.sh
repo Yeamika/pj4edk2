@@ -14,10 +14,8 @@ if [[ -n ${PJB_RUST_ARCHIVE:-} ]]; then
 else
   PJB_ARCHIVE="$PJB_BUILD_DIR/Rust.a" bash "$PJB_HOST_ROOT/tools/build-staticlib.sh"
 fi
-if [[ -z ${PJB_QUICKJS:-} ]]; then
-  PJB_QUICKJS=$(find "${CARGO_HOME:?}/registry/src" -maxdepth 3 -type d -path '*/rquickjs-sys-0.12.2/quickjs' -print -quit)
-fi
-test -n "$PJB_QUICKJS"
+: "${PJB_QUICKJS:?set PJB_QUICKJS to the selected upstream checkout}"
+: "${PJB_UPSTREAM_LOCK:?set PJB_UPSTREAM_LOCK to the resolved source lock}"
 mkdir -p "$PJB_BUILD_DIR/packages" "$PJB_BUILD_DIR/edk-work/Conf"
 # This config is only for compiling the common ABI glue. Board config is compiled
 # independently into the BSP SDK; this temporary EFI is never a delivered boot UI.

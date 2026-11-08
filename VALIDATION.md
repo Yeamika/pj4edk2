@@ -67,3 +67,31 @@ c75d0b87ac76d7648d56ec7a42440efabfec6f884b18d8e77861e13146b80eb1
 
 该归档链接得到的 `w202ds.fd` SHA-256 为
 `80c33775eabf52ce21a3af025d8620d366f360e86b16c3446abb97b5fcc87775`。
+
+## 2026-11-08 上游源码选择验证
+
+构建脚本现在直接获取 `edk2-libc`、PocketJS、QuickJS-NG 的 Git 源码。 默认沿用固定提交；QuickJS-NG 固定为
+`rquickjs-sys 0.12.2` 对应的 `fd0a0210b7be00957751871e7e01b8291268fc29`。
+
+- 三个默认仓库均已真实下载。PocketJS 的 197 个登记文件逐一匹配旧快照； QuickJS 的核心解释器源码和头文件与旧归档一致。
+- 11 项源码选择、UI 输入和真实 Cargo 集成测试通过，覆盖固定提交、标签、分支、
+  自定义仓库、移动的默认分支、固定清单离线重放、缓存被改及不存在的引用。
+- 从下载的 PocketJS 准备独立源码树，Rust 1.93.0 的 ARM64 交叉构建通过； 该源码树的 29 项运行时、10 项嵌入式执行层、5 项
+  Boot API、2 项调试通道测试通过， 默认 UI crate 和文档测试通过。
+- 远端归档传回后，通过源码、实际提交、QuickJS 文件和 Cargo 锁校验； 使用下载的 edk2-libc 和 QuickJS 完成 C
+  组件编译及完整固件链接和封装。
+- 实际 QuickJS `latest` 解析并下载为 `d4187c7e4b57dc62c2dcbee14d25e0bd8162b690`；
+  使用该选择复用默认版本 Rust bundle 时被拒绝。 此项验证下载和身份校验，未验证此最新版本的完整固件兼容性。
+
+schema 3 的 `rust-build.json`、`runtime-build.json` 和最终固件清单记录实际选择，
+`upstream.lock.json` 支持重放，实际 Cargo 锁保存在产物中。
+
+本次默认版本 `PocketJS.a` SHA-256：
+
+```text
+19b2422e2959cae191697601a056cf37cf461718b5ffcda3352fed68644fa841
+```
+
+对应 `w202ds.fd` SHA-256 为
+`18a92a1f45085497832d82de1a22dcf21702c933bf44f9a2f85062635e6c755f`。
+本次未刷写或新增真机验证。
