@@ -12,6 +12,27 @@ Rust crate 名称保持 `pocketjs-boot-ui`，使用 `no_std + alloc`。公共服
 [`pocketjs-boot-api`](../pocketjsforedk2/crates/boot-api)，本组件重新导出供宿主使用。
 引擎实例、输入设备、设置存储和实际启动由宿主提供。
 
+外部项目通过 `build.sh --default-ui DIR --output DIR` 或 `build-rust.sh --default-ui DIR --output DIR`
+选择构建时嵌入的 UI。外部目录只需要资源和如下 `ui.json`，无需复制本目录的 Rust crate：
+
+```json
+{
+  "schema": 1,
+  "scripts": ["pages/main.js", "pages/stage.js"],
+  "font": "assets/Inter-Regular.ttf"
+}
+```
+
+`scripts` 是非空、有序且不重复的 UTF-8 JavaScript 文件列表；脚本在同一个 JS 环境中依次执行。
+`font` 指定有效的 TTF/OTF 文件，当前字体图集保留原有 8 个字号槽位和 ASCII 字符范围。
+所有路径相对于 UI 目录，不允许绝对路径、`..` 或指向目录外的符号链接；缺文件直接报错。
+清单只负责脚本和字体，其他资源需由脚本自行内嵌或使用现有宿主能力。
+
+自定义页面需遵循现有宿主契约：提供 `rimuksInit(configJson)` 和
+`rimuksTick(nowMs, eventsJson)`；宿主传入 JSON 字符串，动作通过 `bootEmit(JSON.stringify(action))`
+返回。可使用现有 PocketJS `ui`、`bootBakeName` 等接口；板级菜单配置仍由最终组合项目提供。
+仅更换样式时，保留自带清单顺序并修改对应页面即可。
+
 脚本入口及页面行为见[默认页面说明](../reference/pocketjs-uefi-handoff/docs/default-ui.md)，运行与验证见
 [仓库构建与测试说明](../README.md)。
 

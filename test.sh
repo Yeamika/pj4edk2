@@ -5,6 +5,7 @@ repo=$(cd -- "$(dirname -- "$0")" && pwd -P)
 export RUSTUP_TOOLCHAIN=1.93.0
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 cargo fetch --locked --manifest-path "$repo/reference/pocketjs-uefi-platform/Cargo.toml"
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$repo/tools/tests" -v
 export POCKETJS_QUICKJS_INCLUDE=$(find "$CARGO_HOME/registry/src" -maxdepth 3 -type d -path '*/rquickjs-sys-0.12.2/quickjs' -print -quit)
 test -n "$POCKETJS_QUICKJS_INCLUDE"
 cargo test --locked --manifest-path "$repo/reference/pocketjs-uefi-platform/Cargo.toml"

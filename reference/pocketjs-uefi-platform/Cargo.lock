@@ -191,6 +191,7 @@ dependencies = [
  "pocket-raster",
  "pocketjs-boot-ui",
  "pocketjs-core",
+ "serde_json",
 ]
 
 [[package]]

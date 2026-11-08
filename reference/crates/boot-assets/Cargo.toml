@@ -12,3 +12,4 @@ pocket-raster = { path = "../../vendor/pocketjs/engine/raster" }
 
 [build-dependencies]
 fontdue = "0.9"
+serde_json = "1"

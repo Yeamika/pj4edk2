@@ -28,11 +28,30 @@ export EDK_TOOLS_PATH=/path/to/build/basetools
 
 BaseTools 可以用 `../edk2-ums9620/build-tools.sh /path/to/build/basetools` 生成。构建输出必须位于源码树外；Cargo 缓存使用正常的 `CARGO_HOME`，目标文件默认放在输出目录。
 
+其他项目可以传入自己的默认 UI 目录和输出目录：
+
+```sh
+/path/to/pj4edk2/build.sh \
+  --default-ui /path/to/my-project/ui \
+  --output /path/to/my-project/build/pocketjs \
+  --edk2 /path/to/edk2-ums9620/edk2
+```
+
+UI 目录包含 `ui.json`、按清单排列的 JavaScript 文件和字体，无需 `Cargo.toml` 或 Rust 源码。
+可从仓库的 `default-ui/ui.json`、`pages/`、`assets/` 开始修改，目录格式和宿主入口见
+[UI 集成说明](default-ui/README.md)。省略 `--default-ui` 时使用仓库自带 UI；也可以通过
+`PJB_DEFAULT_UI` 环境变量指定，命令行参数优先。此变量也适用于直接调用 Cargo。
+
+JS 源码和字体图集仍然在构建时嵌入 `PocketJS.a`。UI 路径、清单、JS 或字体变化都会触发
+Cargo 更新相应内容。输出与 `CARGO_TARGET_DIR` 必须位于源码和 UI 目录外；默认所有目标文件
+都进入 `--output`，也可设置外部 `CARGO_TARGET_DIR` 来共享编译缓存。
+
 | 输出 | 用途 |
 | --- | --- |
 | `PocketJS.a` | Rust 引擎/页面、QuickJS 和 UEFI C 胶合的完整静态归档 |
 | `abi-support/` | 与这次构建匹配的 EDK II / libc 库、入口对象、链接脚本和哈希清单 |
 | `packages/source-manifest.json` | 编译所用 QuickJS、引擎及 EDK II 版本信息 |
+| `runtime-build.json` | 源码、所选 UI 输入及最终归档的对应哈希 |
 
 `PocketJS.a` 交给 `w202ds-boot` 链接进平台 FD；它本身不是可刷写镜像。板级菜单 JSON 不固化在这个独立归档中，而由最终链接阶段提供。
 
@@ -41,16 +60,19 @@ BaseTools 可以用 `../edk2-ums9620/build-tools.sh /path/to/build/basetools` �
 可以只在编译机完成 Rust 阶段，再在拥有 AArch64 C 工具链和 EDK II 的主机完成公共 UEFI 组件编译：
 
 ```sh
-# 编译机：使用同一份 pj4edk2 源码
-./build-rust.sh /path/to/build/rust
+# 编译机：使用同一份 pj4edk2 源码和 UI 文件
+./build-rust.sh --default-ui /path/to/my-project/ui --output /path/to/build/rust
 
 # 传回 Rust.a、quickjs/、rust-build.json，保留目录结构
 # 本地主机：不需要本地安装 Rust
 ./build.sh --edk2 ../edk2-ums9620/edk2 \
+  --default-ui /path/to/my-project/ui \
   --rust-build /path/to/received/rust --output /path/to/build/pocketjs
 ```
 
-接收端会校验 Rust 版本、构建源码和所有传回文件的哈希，防止拿错源码或归档。默认页面和字体的许可证随对应源码保留。
+接收端会校验 Rust 版本、构建源码、所选 UI 和所有传回文件的哈希。两端 UI 的绝对路径可以不同，
+清单和输入文件内容必须一致；缺文件或 UI 不匹配会拒绝构建。旧版 schema 1 构建清单需要重新构建。
+`build-rust.sh OUTPUT_DIRECTORY` 的旧调用方式仍可用。默认页面和字体的许可证随对应源码保留。
 
 ## 测试
 
@@ -61,5 +83,6 @@ bash test.sh
 ```
 
 `test.sh` 自动向本机测试提供固定 QuickJS 头文件，并编译官方 guest。只在 Rust 编译机运行时可以传入 `--rust-only`，UEFI C 测试在本地另行执行。
+设置 `PJB_RUN_CARGO_TESTS=1` 可额外验证外部 UI 的真实嵌入，以及共享 Cargo 缓存下脚本、字体和目录切换后的重编译。
 
 本仓库不依赖旧研究目录或 Windows 演示工程。底层模块文档保留接口设计与调试说明，当前构建入口以本页为准。实际验证范围见 [VALIDATION.md](VALIDATION.md)。

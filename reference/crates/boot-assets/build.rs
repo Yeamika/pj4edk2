@@ -2,14 +2,16 @@
 use fontdue::{Font, FontSettings};
 use std::{env, fs, path::PathBuf};
 
+#[path = "../../../tools/ui-input.rs"]
+mod ui_input;
+
 fn main() {
-    let source = PathBuf::from("../../../default-ui/assets/Inter-Regular.ttf");
-    println!("cargo:rerun-if-changed={}", source.display());
+    let source = ui_input::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../default-ui")).font;
     let font = Font::from_bytes(
-        fs::read(source).expect("shared Inter font"),
+        fs::read(source).expect("UI font"),
         FontSettings::default(),
     )
-    .expect("valid Inter font");
+    .expect("valid UI font");
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo output directory"));
     for compact in [false, true] {
         for (slot, size) in [14.0, 18.0, 24.0, 32.0, 54.0, 12.0, 20.0, 18.0]
