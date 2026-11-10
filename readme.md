@@ -6,7 +6,7 @@
 
 本地克隆：`/state/workspace/pushup/pj4edk2-linux-boot-display`。消费入口：`w202ds-linux/6.18.35/Devices/drm/source/pj4edk-boot-display/common`，位于实际板级模块内部；不是第二套驱动或加载器。远程使用 .gitmodules/gitlink，本地入口为相对符号链接。
 
-`include/pjb_boot_display.h` 提供公共显示属性、长度/版本/几何/容量/溢出校验和非对齐大端解码。现有早期 console 已调用它；固定显存、旋转、终端绘制、DPU、时钟和缓存操作留在板级。原生 DRM 的独立文本布局代码本轮未改。
+`include/pj4edk2_boot_display.h` 提供公共显示属性、长度/版本/几何/容量/溢出校验和非对齐大端解码。现有早期 console 已调用它；固定显存、旋转、终端绘制、DPU、时钟和缓存操作留在板级。原生 DRM 的独立文本布局代码本轮未改。
 
 公共实现无内存分配、UEFI/Linux API、MMIO 或板型常量。当前格式保持 20 个大端 u32、80 字节，公共格式只定义现有版本的 RGB565 描述。合法通用布局还必须通过消费方自己的硬件接受策略，不能仅凭协议合法就访问物理地址。
 
