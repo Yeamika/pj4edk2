@@ -36,7 +36,6 @@ II / libc 版本及 39 个文件的哈希。重新构建受工具链和构建路
 - 外部 UI 在原默认页面后增加独有标记脚本；标记只存在于外部 UI 归档，默认 UI 归档中不存在。
 - 将外部 UI 与 Rust bundle 传回不同绝对路径后，源码、UI 和文件哈希校验通过；本地无需 Rust，完成 UEFI C 组件编译、完整
   `PocketJS.a` 和最终固件链接。
-- 实际产物的 UI 与重新选择的 UI 不一致时，`w202ds-boot` 拒绝复用。
 
 本次外部 UI 测试归档 `PocketJS.a` SHA-256：
 
@@ -60,7 +59,7 @@ UEFI 宿主移到 `uefi-runtime/`，Cargo 包名为 `pocketjs-uefi-runtime`；�
 - 6 项 UI 输入与真实 Cargo 集成测试通过，覆盖外部脚本和字体更新及共享缓存下切换 UI 目录。
 - 本地 3 项实际 UEFI C 适配测试通过。
 - 默认和外部 UI 均完成 ARM64 构建；新归档记录全部新源码目录，旧目录的归档被拒绝复用。
-- 编译机归档传回后校验通过，完成 UEFI C 组件、最终 FD、RAMBoot 与 LK 容器封装；当前未做真机验证。
+- 编译机归档传回后校验通过，完成 UEFI C 组件构建；当前未做真机验证。
 
 外部 UI 集成验证归档 `PocketJS.a` SHA-256：
 
@@ -68,8 +67,6 @@ UEFI 宿主移到 `uefi-runtime/`，Cargo 包名为 `pocketjs-uefi-runtime`；�
 c75d0b87ac76d7648d56ec7a42440efabfec6f884b18d8e77861e13146b80eb1
 ```
 
-该归档链接得到的 `w202ds.fd` SHA-256 为
-`80c33775eabf52ce21a3af025d8620d366f360e86b16c3446abb97b5fcc87775`。
 
 ## 2026-11-08 上游源码选择验证
 
@@ -95,8 +92,6 @@ schema 3 的 `rust-build.json`、`runtime-build.json` 和最终固件清单记�
 19b2422e2959cae191697601a056cf37cf461718b5ffcda3352fed68644fa841
 ```
 
-对应 `w202ds.fd` SHA-256 为
-`18a92a1f45085497832d82de1a22dcf21702c933bf44f9a2f85062635e6c755f`。
 本次未刷写或新增真机验证。
 
 ## 2026-11-08 通用 EDK II 独立构建验证
@@ -112,8 +107,6 @@ schema 3 的 `rust-build.json`、`runtime-build.json` 和最终固件清单记�
 - EDK II 和第一份 Brotli 从上游下载；第二份 Brotli 下载连接停滞后， 复用本轮已下载的相同 Git 对象。两个子模块均核对为 EDK
   II 指定的 `f4153a09f87cbb9c826d8fc12c74642bb2d879ea`。
 - 使用独立 EDK II 头文件完成 3 项 UEFI C 适配测试。
-- 独立构建的运行时与 BaseTools 交给 `w202ds-boot` 后，平台版本校验、最终链接、 RAMBoot 和 5 MiB LK
-  容器封装全部通过。
 
 独立 `PocketJS.a` SHA-256：
 

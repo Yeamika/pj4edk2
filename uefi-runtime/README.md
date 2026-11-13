@@ -55,12 +55,9 @@ panic and disable LTO/sanitizers. The lower-level `build-staticlib.sh` emits
 only the Rust portion; it is not a complete runtime delivery. `prepare-edk2.py`
 generates an isolated work package; it does not modify upstream source.
 
-The consuming project checks that these ABI libraries and its platform were
-built with the same EDK II revision. For example,
-`w202ds-boot/tools/edk2_sdk.py export` combines platform FFS modules, the ABI
-support libraries and board configuration into a pinned SDK. `edk2_sdk.py link`
-then links the independent runtime archive and assembles the firmware volumes.
-No compile, flash or device command occurs in that final link step.
+The consuming project must build these ABI libraries and its platform with
+the same EDK II revision, then link the runtime archive and ABI support
+libraries into its firmware.
 
 ## Persistent settings
 
@@ -238,9 +235,8 @@ charging is not persisted.
 
 The opt-in `charge-self-test` feature drives the actual button through page key
 events and the normal host handler, checks acknowledgements, and requests stop
-on completion or failure. It is excluded from normal firmware. W202DS physical
-RAM tests passed enable/stop with signed battery current; see that BSP's
-delivery for measurements. `tests/test_hardware_bridge.py` covers
+on completion or failure. It is excluded from normal firmware.
+`tests/test_hardware_bridge.py` covers
 absent/malformed protocols, read errors, invalid values and child-launch failure
 paths.
 

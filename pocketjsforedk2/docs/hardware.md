@@ -39,9 +39,7 @@ values. Telemetry updates do not reset the automatic boot countdown.
 Touch uses the existing EFI Absolute Pointer protocol, not a second vendor
 pointer ABI. Raw coordinates are mapped through protocol min/max to physical GOP
 pixels, then rotated together with the display. Errors cancel the current
-gesture without a click. The W202DS provider rejects corrupt or multiple-contact
-packets and publishes the protocol only after its retained-firmware probe
-passes.
+gesture without a click.
 
 Before starting a child, the reference host finishes presentation and drops its
 VM and output buffers. After LoadImage succeeds, it calls `set_quiesced(1)`;
