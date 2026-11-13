@@ -24,7 +24,7 @@ Submodules default to the recorded commit. `git submodule update --remote compon
 
 The default logical resolution is **1920×1200**, scaled to fit the browser. The toolbar shows the title on the left, with resolution, restart and a menu button on the right. The menu opens full settings for backend, scene, battery level, external power, charging state, voltage, current and the virtual disk. Restart applies the selected settings and starts a fresh preview clock.
 
-The toolbar also provides simulated W202DS hardware keys in the order power, volume up, volume down, in the same row to the left of the resolution. Power sends Enter to confirm, volume up sends Up, and volume down sends Down. When the simulated device is off, power starts a fresh preview; volume keys are disabled. The toolbar scrolls horizontally on narrow screens. These keys do not change the computer's audio volume or power state.
+The toolbar also provides simulated hardware keys in the order power, volume up, volume down, in the same row to the left of the resolution. Power sends Enter to confirm, volume up sends Up, and volume down sends Down. When the simulated device is off, power starts a fresh preview; volume keys are disabled. The toolbar scrolls horizontally on narrow screens. These keys do not change the computer's audio volume or power state.
 
 F2 opens settings; clicking the delay field reveals its numeric keypad. Arrow keys and wheel scroll smoothly. Touch dragging follows the pointer and settles onto the nearest row on release; there is no inertia. Confirm twice to preview a boot transition; reload or apply to return.
 
