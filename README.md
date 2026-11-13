@@ -8,9 +8,8 @@
 | [uefi](https://github.com/Yeamika/pj4edk2/tree/uefi) | 公共 ABI、UEFI 宿主、默认页面、共享 UI 包与构建工具 |
 | [linux-efi](https://github.com/Yeamika/pj4edk2/tree/linux-efi) | EFI → Linux 的公共显示描述、范围校验与 DT 写入辅助 |
 | [kernel-boot-display](https://github.com/Yeamika/pj4edk2/tree/kernel-boot-display) | Linux 启动显示描述、终端绘制与内建 console 适配 |
-
-另有 `qemu-arm64-small` 和 `webui-viewer` 实验分支，分别用于 ARM64 虚拟启动链与浏览器 UI 预览。
-它们的远端可用性以仓库分支列表为准；实验分支不属于产品板级固件。
+| [qemu-arm64-small](https://github.com/Yeamika/pj4edk2/tree/qemu-arm64-small) | ARM64 QEMU 虚拟启动链、EFI 桥接与 Linux 显示交接验证 |
+| [webui-viewer](https://github.com/Yeamika/pj4edk2/tree/webui-viewer) | 浏览器 UI 预览，共用脚本、UI 包与渲染规则 |
 
 ## 获取组件
 
@@ -29,8 +28,3 @@ git -C pj4edk2 submodule update --init --recursive
 
 UEFI 页面只提交启动请求；Linux EFI 层负责载荷与 DT 交接；内核显示层负责接收并呈现启动日志。
 initrd 范围、rootfs PARTUUID 和启动显示描述是三类不同参数，接收方与生命周期不能混用。
-
-W202DS 的板级驱动由 [edk2-ums9620](https://github.com/Yeamika/edk2-ums9620) 维护，
-加载器与固件组合由 [w202ds-boot](https://github.com/Yeamika/w202ds-boot) 维护，
-Linux 板级显示适配由 [w202ds-linux](https://github.com/Yeamika/w202ds-linux) 维护。
-公共层不包含这些设备的固定地址、寄存器或刷写策略。
