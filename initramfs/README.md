@@ -10,7 +10,7 @@ There is no BusyBox, shell, init system or root disk dependency.
 It registers a virtual atomic DRM/KMS device with GEM shmem buffers and a
 320×200 connector. It validates the public boot-display property if present.
 It never maps the fixture's declared physical address and does not drive QEMU's
-GPU or W202DS hardware. Visible output comes from virtio-gpu in direct mode. In the complete ramfb EFI
+GPU hardware. Visible output comes from virtio-gpu in direct mode. In the complete ramfb EFI
 path, the kernel built-in shared console has already been receiving and drawing
 printk messages before PID1 starts. This module does not register that console.
 

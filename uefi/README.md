@@ -3,7 +3,7 @@
 This directory builds the menu for the `qemu-arm64-small` branch. Its runtime source is the
 `pj4edk2/` Git submodule tracking the `uefi` branch; the recorded gitlink pins the actual revision.
 `build.py` uses that source, the pinned generic upstream EDK II and edk2-libc to
-link `PocketJsBoot.efi`. The independent Linux loader is built by `../efi/build.py`. No W202DS board firmware or LK is used.
+link `PocketJsBoot.efi`. The independent Linux loader is built by `../efi/build.py`.
 
 The runtime submodule provides `build.sh` and its source-lock controls. Initialize its PocketJS and edk2-libc submodules before building. EDK II and QuickJS can be prepared by the runtime build entry. EDK II source versions are recorded in `sources.lock.json` and the
 build's `upstream.lock.json`; `--edk2` can use a separately initialized checkout.

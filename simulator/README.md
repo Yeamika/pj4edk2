@@ -2,7 +2,7 @@
 
 Requires QEMU `qemu-system-aarch64`, AAVMF code/variable firmware files,
 Python 3.12+, mtools and dosfstools. PNG/PPM screenshots use only the Python standard library. Linux host; KVM is not
-required. This emulates `virt`, not UMS9620 peripherals.
+required. This emulates the QEMU `virt` machine.
 
 `run.py` supports persistent GPT disk files, optional snapshot writes, keyboard
 input, screenshots, machine DTB export and a direct-kernel smoke mode. Each run

@@ -1,7 +1,7 @@
 # pj4edk2 QEMU ARM64 Small
 
 ARM64 `virt` 测试工程：精简 Linux、virtio-gpu DRM、带自定义 DRM 模块的 initramfs，
-以及 pj4edk2 UEFI 菜单。用于验证公共交接协议和完整启动流程，不模拟 W202DS 私有硬件。
+以及 pj4edk2 UEFI 菜单。用于验证公共交接协议和完整启动流程。
 
 ```text
 simulator/             QEMU 启动、截图、键盘、GPT/FAT32 磁盘生成
@@ -78,12 +78,11 @@ QEMU 关闭后再修改磁盘。演示磁盘的 `EFI/BOOT/BOOTAA64.EFI` 用于�
 默认分辨率为 **1920×1200**，完整 EFI 模式默认使用 ramfb，直接启动内核模式
 默认使用 virtio-gpu。`run.py --size WIDTHxHEIGHT` 可覆盖尺寸。EFI 应用内的
 QEMU 适配先选择标准 GOP 模式；AAVMF 缺少所需 ramfb 模式时，使用 fw_cfg
-建立新的 reserved-RAM GOP surface。这里的虚拟硬件操作不进入共享协议或 W202DS。
+建立新的 reserved-RAM GOP surface。这些虚拟硬件操作由 QEMU 适配层实现。
 
 Linux 的 console 在 `console_initcall` 内建注册，随即接收 printk，
 从 `core_initcall` 开始由 worker 绘制，采用 8×16 字形。它不等待 initramfs 或
 DRM 模块加载。`--require-handoff` 同时检查 console 注册发生在 `/init` 运行前。
-W202DS 也使用早期注册和延后绘制，但保留自己的 DPU/缓存/时钟适配。
 
 ## 交接协议示例
 
@@ -104,7 +103,7 @@ boot-output 区域，保留顶部和侧边。桥接命令行关闭 efifb，避�
 成功标记包括 `PJ4EDK2_DRM PASS driver=virtio_gpu`、
 `PJ4EDK2_MODULE PASS virtual DRM/KMS registered`、`PJ4EDK2_FB PASS`、
 `PJ4EDK2_SMALL_READY`。提供 fixture 时还应出现 `PJ4EDK2_DT PASS`。
-这些验证不代表 W202DS 的 DPU、旋转或真实显存交接已通过。
+这些验证仅覆盖 QEMU 虚拟硬件环境。
 
 ## 子模块与版本一致性
 

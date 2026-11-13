@@ -19,5 +19,5 @@ Use `simulator/disk.py --bridge-efi /path/to/build/efi/DisplayBridge.efi` to ins
 The loader validates the menu's optional display request against actual GOP,
 publishes a reserved coherent framebuffer and boot-output rectangle in a copied
 DT, then chainloads the Linux EFI stub. It restores the DT table if the child
-returns. It does not initialize display hardware or implement W202DS policies.
+returns. It does not initialize display hardware.
 `fixture.c` is a separate host-side test producer for synthetic descriptors.
