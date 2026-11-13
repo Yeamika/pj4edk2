@@ -1,128 +1,47 @@
-# PocketJS for EDK II
+# PJ4EDK2 Web UI Viewer
 
-独立维护 UEFI 引导菜单的公共接口、PocketJS 运行时和默认页面，输出 `PocketJS.a` 及配套的 UEFI ABI 支持库。 依赖通用
-EDK II 和 UEFI 协议，可由不同平台接入。板级驱动、菜单配置和最终固件组合由消费项目提供； 当前验证的架构为 AArch64。
-
-## 源码组成
-
-| 目录                       | 内容                                                                  |
-| -------------------------- | --------------------------------------------------------------------- |
-| `pocketjsforedk2/`         | `no_std` 公共 ABI、生成的 C 头文件、Boot API 和接口测试               |
-| `default-ui/`              | 默认菜单、设置、恢复和充电页面，以及字体资源                          |
-| `uefi-runtime/`            | Rust 运行时和 UEFI C 胶合：绘制、输入、硬件协议、设置存储及子应用启动 |
-| `crates/embedded-runtime/` | 通用嵌入式执行层：JS 实例、页面上下文、输入和渲染适配                 |
-| `crates/debug-channel/`    | 有界调试消息队列                                                      |
-| `crates/boot-assets/`      | 字体图集等共享资源的构建                                              |
-| `vendor/pocketjs/`         | 供直接 Cargo 接入及历史核对的固定快照；构建脚本使用下载的上游源码     |
-| `docs/`                    | 模块、接入说明及跨 EFI 实例交接等设计文档                             |
-| `edk2-libc/`               | 保留的固定版本子模块；构建脚本从选定上游下载 C 库                     |
-
-版本固定在 [sources.lock.json](sources.lock.json)、各 `Cargo.lock` 和
-`rust-toolchain.toml`。上游引擎文件校验表位于 `vendor/UPSTREAM.json`。接口只在 `pocketjsforedk2`
-定义，消费端不另存一份公共 ABI。
-
-UEFI 宿主包名为 `pocketjs-uefi-runtime`，通用执行层包名为 `pocketjs-embedded-runtime`。
-运行时代码按职责直接放在上述目录中；跨 EFI 共享实例仍是设计，见[模块与状态说明](docs/modules.md)。
-
-## 构建
-
-需要 Git、Rust 1.93.0（含 `rust-src` 和 `aarch64-unknown-none`）、Cargo、Python 3.11+、GNU
-make、主机 GCC/G++、UUID 开发头文件和 AArch64 GNU GCC/binutils。Rust 构建保留 `x18`，使用
-`panic=abort`，不启用 LTO。
+Browser-only preview of the shared PJ4EDK2 UI, running the pinned PocketJS WASM core and software rasterizer. Builds require Cargo and the pinned Rust toolchain with `wasm32-unknown-unknown`; serving a prebuilt package only requires Python.
 
 ```sh
-./build.sh --output /path/to/build/pocketjs \
-  --source-cache /path/to/cache/upstream
+git submodule update --init components/pj4edk2
+git -C components/pj4edk2 submodule update --init vendor/pocketjs
+rustup target add wasm32-unknown-unknown --toolchain 1.93.0
+python3 tools/build.py --target-dir <cargo-build-dir>
+python3 tools/serve.py --port 1299
 ```
 
-脚本独立下载通用 EDK II 及其固定的 BaseTools、MdeModulePkg Brotli 子模块，并在输出目录编译 BaseTools。
-无需任何板级仓库。构建输出必须位于源码树外；Cargo 缓存使用正常的 `CARGO_HOME`，目标文件默认放在输出目录。
+Open the printed address. Use `--bind 0.0.0.0` to serve on the network.
 
-构建脚本自动获取 EDK II、`edk2-libc`、PocketJS、QuickJS-NG 的上游 Git 源码，默认使用
-`sources.lock.json` 中的固定提交。可以单独选择仓库、提交、标签、分支或最新提交：
+- `components/pj4edk2/`: source repository submodule (`uefi` branch), providing `default-ui/`; no duplicated UI sources.
+- `viewer/`: `.pocket` reader, WASM framebuffer presentation, input and simulated host services.
+- `wasm/`: Cargo integration reusing the upstream browser embedding with the shared PJ4EDK2 pixel presentation policy. Its small build adapter operates in Cargo output; the upstream submodule remains unchanged.
+- `runtime/`: generated WASM binary, upstream JavaScript bindings and provenance; ignored by Git.
+- `ui.pocket`: generated single-file UI package, ignored by Git.
+- `index.html`: preview, top toolbar and collapsible settings drawer.
+- `tools/serve.py`: standard-library HTTP server.
 
-```sh
-./build.sh --output /path/to/build/pocketjs \
-  --source-cache /path/to/cache/upstream \
-  --source-ref pocketjs=latest \
-  --source-repo quickjs=https://github.com/quickjs-ng/quickjs.git \
-  --source-ref quickjs=fd0a0210b7be00957751871e7e01b8291268fc29
-```
+Submodules default to the recorded commit. `git submodule update --remote components/pj4edk2` explicitly selects the latest source branch; review compatibility and record the new gitlink in this branch. Development symlinks must not replace the published submodule entry. The selected runtime revision must contain the shared UI-package and rendering crates used by this viewer.
 
-`latest` 指所选仓库默认分支的 HEAD；分支和标签每次重新解析。构建把实际提交写入 `upstream.lock.json`，下次用
-`--source-lock /path/to/build/upstream.lock.json` 重放。`--source-ref edk2=REV` 和
-`--source-repo edk2=URL` 可选择通用 EDK II 的其他版本或 fork。 Rust
-阶段只解析另外三个上游；平台组合工程指定自己使用的 EDK II。 具体用法、缓存和编译机分工见
-[上游源码选择](docs/upstream-sources.md)。
+The default logical resolution is **1920×1200**, scaled to fit the browser. The toolbar shows the title on the left, with resolution, restart and a menu button on the right. The menu opens full settings for backend, scene, battery level, external power, charging state, voltage, current and the virtual disk. Restart applies the selected settings and starts a fresh preview clock.
 
-其他项目可以传入自己的默认 UI 目录和输出目录：
+The toolbar also provides simulated W202DS hardware keys in the order power, volume up, volume down, in the same row to the left of the resolution. Power sends Enter to confirm, volume up sends Up, and volume down sends Down. When the simulated device is off, power starts a fresh preview; volume keys are disabled. The toolbar scrolls horizontally on narrow screens. These keys do not change the computer's audio volume or power state.
 
-```sh
-/path/to/pj4edk2/build.sh \
-  --default-ui /path/to/my-project/ui \
-  --output /path/to/my-project/build/pocketjs \
-  --edk2 /path/to/generic-edk2
-```
+F2 opens settings; clicking the delay field reveals its numeric keypad. Arrow keys and wheel scroll smoothly. Touch dragging follows the pointer and settles onto the nearest row on release; there is no inertia. Confirm twice to preview a boot transition; reload or apply to return.
 
-UI 目录包含 `ui.json`、按清单排列的 JavaScript 文件和字体，无需 `Cargo.toml` 或 Rust 源码。 可从仓库的
-`default-ui/ui.json`、`pages/`、`assets/` 开始修改，目录格式和宿主入口见
-[UI 集成说明](default-ui/README.md)。省略 `--default-ui` 时使用仓库自带 UI；也可以通过
-`PJB_DEFAULT_UI` 环境变量指定，命令行参数优先。此变量也适用于直接调用 Cargo。
+The virtual ESP is an in-memory file tree. Import a folder, scan `.efi` paths, load/save `EFI/BOOT/pj4edk/config.json`, or export/import the tree as JSON. Default EFI files are labeled placeholders, not executables. Shutdown stops the simulated device and UI ticks; the power-on button restarts it. Charging toggles update simulated power telemetry; recovery shows simulated diagnostics/logs and can reset virtual startup settings. Nothing writes to a real partition or starts an operating system. Importing copies files into memory, without changing the source folder.
 
-`--edk2 DIR` 使用调用方提供的 EDK II Git checkout，不检查它是否等于本项目的默认提交， 也不下载或修改它；使用时不能同时指定
-`--source-ref edk2=...` 或 `--source-repo edk2=...`。 外部 EDK II 的两个 Brotli
-子模块需由调用方初始化。`EDK_TOOLS_PATH` 可复用已编译的工具； 也可单独运行
-`python3 tools/build-basetools.py --edk2 DIR --output /path/to/build/basetools`。
-运行时 ABI 支持库与平台 EDK II 的版本匹配由最终组合工程检查。
+The viewer fetches `ui.pocket` once instead of loading individual page scripts and font files. The settings drawer can also load a local `.pocket`. This is the same upstream PocketJS v2 UI package accepted by UEFI at `EFI/BOOT/pj4edk/ui.pocket`. It contains source JS, a TTF and eight baked font atlases. The WASM core loads those same atlases for measurement and rasterization; this is not QuickJS bytecode. Bounds, target, host profile and integrity hashes are checked before execution.
 
-JS 源码和字体图集仍然在构建时嵌入 `PocketJS.a`。UI 路径、清单、JS 或字体变化都会触发 Cargo 更新相应内容。输出与
-`CARGO_TARGET_DIR` 必须位于源码和 UI 目录外；默认所有目标文件 都进入 `--output`，也可设置外部
-`CARGO_TARGET_DIR` 来共享编译缓存。
+The metrics overlay and `window.viewerStats` identify `pocketjs-wasm-software` and measure UI calls, core/raster/presentation CPU time, animation-frame intervals and WASM memory. UI nodes, layout, font measurement, transforms and pixels come from PocketJS; the browser canvas displays its framebuffer. The UI JavaScript uses the browser engine, while UEFI uses QuickJS. The menu host supplies its own events and clock over upstream direct UI operations. These measurements are neither firmware timings nor input-to-photon latency. Rendering takes place in the browser accessing the page, not on the HTTP server.
 
-| 输出                            | 用途                                                            |
-| ------------------------------- | --------------------------------------------------------------- |
-| `PocketJS.a`                    | Rust 引擎/页面、QuickJS 和 UEFI C 胶合的完整静态归档            |
-| `abi-support/`                  | 与这次构建匹配的 EDK II / libc 库、入口对象、链接脚本和哈希清单 |
-| `packages/source-manifest.json` | 编译所用 QuickJS、引擎及 EDK II 版本信息                        |
-| `runtime-build.json`            | 源码、所选 UI 输入及最终归档的对应哈希                          |
-| `upstream.lock.json`            | 四个上游仓库及这次实际使用的完整提交                            |
-| `Cargo.lock`                    | 所选源码实际使用的 Rust 依赖锁                                  |
+`tools/build.py` reads existing submodules and does not fetch PocketJS. `--ui DIR` selects an external UI directory; `--output FILE` selects the `.pocket` output and `--runtime-output DIR` selects the generated engine assets. `--target-dir DIR` controls Cargo output. An explicit `--build-std` can use installed `rust-src` instead of a preinstalled WASM standard library; normal builds use the installed WASM target. Serving prebuilt artifacts requires no compiler.
 
-`PocketJS.a` 交给平台组合工程链接进 FD；它本身不是可刷写镜像。板级菜单 JSON 不固化在这个独立归档中，而由最终链接阶段提供。 W202DS
-的消费端是 `w202ds-boot`；`edk2-ums9620` 仅负责该平台驱动，不是本仓库的依赖。
+Settings offer two execution backends: **PocketJS (WASM)**, the default, and **Direct (browser DOM)**, a lightweight adapter. Both read the same `.pocket` and run its shared scripts. Changing backend restarts the preview and clears its clock and performance samples; resolution, power telemetry and the virtual ESP are retained. The metrics label always names the active backend. DOM timings cover JavaScript work; browser layout, paint and GPU composition are not included in its render timer. Glyph appearance and layout details can differ between the adapters.
 
-## 使用 Rust 编译机
+The shared default UI uses the original bundled Inter font in both modes. Native UEFI and WASM use the same density-aware atlases, rasterized directly from the font with glyph coverage preserved; DOM loads the original font file. Page helpers suppress unchanged property/text writes and cache text measurements. Native UEFI and WASM both use `components/pj4edk2/crates/rendering`: transformed glyphs and images use nearest sampling, and paint/hit-test translations snap to the pixel grid. Canvas presentation uses nearest scaling. DOM uses its browser font renderer and remains a visual reference, with possible differences in glyph hints and corner coverage.
 
-可以只在编译机完成 Rust 阶段，再在拥有 AArch64 C 工具链和 EDK II 的主机完成公共 UEFI 组件编译：
+The WASM presenter continues to tick the upstream core. With only static UI operations, unchanged revisions skip draw/raster/canvas work; other upstream operations keep checking the draw hash so native animations continue. Its framebuffer view is reused until WASM memory changes. Animations and input still update on animation frames.
 
-```sh
-# 编译机：使用同一份 pj4edk2 源码和 UI 文件
-./build-rust.sh --default-ui /path/to/my-project/ui --output /path/to/build/rust
+## Scope and verification
 
-# 传回 Rust.a、quickjs/、Cargo.lock、upstream.lock.json、rust-build.json
-# 本地主机：不需要本地安装 Rust
-./build.sh \
-  --default-ui /path/to/my-project/ui \
-  --source-lock /path/to/received/rust/upstream.lock.json \
-  --rust-build /path/to/received/rust --output /path/to/build/pocketjs
-```
-
-接收端可另加 `--edk2 /path/to/generic-edk2`，或使用默认的独立 EDK II 下载。 Rust 编译机阶段不需要 EDK
-II、BaseTools 或板级源码。 接收端会校验 Rust 版本、构建源码、所选 UI 和所有传回文件的哈希。两端 UI 的绝对路径可以不同，
-清单和输入文件内容必须一致；缺文件或 UI 不匹配会拒绝构建。schema 3 同时校验选定上游和 QuickJS 源码；旧版归档需要重新构建。
-`build-rust.sh OUTPUT_DIRECTORY` 的旧调用方式仍可用。默认页面和字体的许可证随对应源码保留。
-
-## 测试
-
-```sh
-export CARGO_TARGET_DIR=/path/to/build/native-target
-export PJB_EDK2_ROOT=/path/to/generic-edk2
-bash test.sh
-```
-
-`test.sh` 自动向本机测试提供固定 QuickJS 头文件，并编译官方 guest。只在 Rust 编译机运行时可以传入
-`--rust-only`，UEFI C 测试在本地另行执行。 设置 `PJB_RUN_CARGO_TESTS=1` 可额外验证外部 UI 的真实嵌入，以及共享
-Cargo 缓存下脚本、字体和目录切换后的重编译。
-
-本仓库不依赖旧研究目录或 Windows 演示工程。底层模块文档保留接口设计与调试说明，当前构建入口以本页为准。实际验证范围见
-[VALIDATION.md](VALIDATION.md)。
+This is the `webui-viewer` component branch, separate from the `uefi` runtime. Its remote availability is determined by the repository branch list. Source availability, successful artifact generation and browser interaction are separate checks. Browser previews do not validate QEMU boot, firmware USB protocols or physical hardware.

@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {readPackage} from '../viewer/package.mjs';
+const bytes=readFileSync(process.argv[2]);
+const packageUi=readPackage(bytes);
+assert(packageUi.javascript.includes('rimuksInit'));
+assert(packageUi.assets.get('font.ttf').length>1000);
+for(let i=0;i<8;i++)assert(packageUi.assets.has(`fonts/${i}.atlas`));
+for(const end of [0,32,100,bytes.length-1])assert.throws(()=>readPackage(bytes.subarray(0,end)));
+const changed=Buffer.from(bytes);changed[120]^=1;assert.throws(()=>readPackage(changed));
+console.log('PocketJS UI package / corruption checks PASS');

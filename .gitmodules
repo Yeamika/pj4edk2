@@ -1,3 +1,4 @@
-[submodule "edk2-libc"]
-	path = edk2-libc
-	url = https://github.com/tianocore/edk2-libc.git
+[submodule "pj4edk2"]
+	path = components/pj4edk2
+	url = https://github.com/Yeamika/pj4edk2.git
+	branch = uefi

@@ -1,0 +1,30 @@
+[package]
+name = "pj4edk2-web-runtime"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Reuse the upstream browser embedding with a nearest-sampling presenter.
+# The upstream submodule and core remain unchanged.
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+pj4edk2-rendering = { path = "../components/pj4edk2/crates/rendering" }
+pocketjs-core = { path = "../components/pj4edk2/vendor/pocketjs/engine/core" }
+pocket-runtime = { path = "../components/pj4edk2/vendor/pocketjs/engine/runtime" }
+pocket-runtime-cabi = { path = "../components/pj4edk2/vendor/pocketjs/engine/runtime-cabi" }
+pocket-drivers = { path = "../components/pj4edk2/vendor/pocketjs/engine/drivers" }
+pocket-raster = { path = "../components/pj4edk2/vendor/pocketjs/engine/raster" }
+pocket-present = { path = "../components/pj4edk2/vendor/pocketjs/engine/present" }
+pocket-package = { path = "../components/pj4edk2/vendor/pocketjs/engine/package" }
+serde_json = "1"
+
+[workspace]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
