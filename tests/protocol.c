@@ -41,6 +41,11 @@ int main(void)
     v[6]=320;v[7]=200;v[8]=640;v[10]=320;v[11]=200;
     v[12]=v[13]=0;v[14]=320;v[15]=200;v[16]=v[17]=0;
     assert(pj4edk2_display_validate_cells(v,20));
+    v[0]=2; v[9]=2; v[18]=4; v[8]=1280; v[4]=v[5]=256000;
+    assert(pj4edk2_display_validate_cells(v,20));
+    v[9]=3; assert(pj4edk2_display_validate_cells(v,20));
+    v[9]=1; assert(!pj4edk2_display_validate_cells(v,20));
+    v[9]=2; v[0]=1; assert(!pj4edk2_display_validate_cells(v,20));
     puts("PASS: protocol, unaligned big-endian roundtrip, bounds, overflow, foreign layout");
     return 0;
 }
