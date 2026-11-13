@@ -7,6 +7,7 @@ pub mod platform_config;
 pub mod rotation;
 pub mod power;
 pub mod settings;
+pub mod discovery;
 #[cfg(target_os = "none")]
 mod firmware;
 #[cfg(all(target_os = "none", feature = "settings-self-test"))]

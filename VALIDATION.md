@@ -1,10 +1,13 @@
-# 2026-11-08 源码拆分验证
+# 历史验证记录
+
+以下记录对应 2026-11-08 的源码和构建。后续子模块迁移、共享 UI 包、显示与 Fastboot 修改需要重新验证；本文不将历史结果视为当前版本通过。
+
+## 2026-11-08 源码拆分验证
 
 接口、运行时和默认页面以 `uefi-controls-20261105` 对应源码为基线；固定 PocketJS 上游快照的 197
 个登记文件在迁移前已逐一验证。引擎实现未作本板修改，字体和上游许可随源代码保留。
 
-- Rust 阶段在现有 `NativeCmpEnv` / `p90-rust-builder` 上使用隔离的 Rust 1.93.0，未改变编译机原有
-  1.99.0 默认环境。
+- Rust 阶段使用 Rust 1.93.0。
 - 运行时测试通过：20 项库测试、1 项 BootDisplay、4 项旋转、4 项设置，共 29 项。
 - 公共接口 workspace 的 5 项 Boot API 测试通过。
 - `default-ui` 独立 `Cargo.lock` 已同步到当前路径依赖，`cargo test --locked` 和文档测试成功；该 crate
@@ -42,7 +45,7 @@ II / libc 版本及 39 个文件的哈希。重新构建受工具链和构建路
 ```
 
 新版 `rust-build.json` 和 `runtime-build.json` 使用 schema 2，记录有序脚本、字体及所有所选 UI
-输入的哈希。编译机临时目录、私有工具链和缓存已清理，原有默认 Rust 1.99.0 保持。本次未做新固件真机验证。
+输入的哈希。该阶段未做新固件真机验证。
 
 ## 2026-11-08 运行时目录整理验证
 
@@ -70,7 +73,7 @@ c75d0b87ac76d7648d56ec7a42440efabfec6f884b18d8e77861e13146b80eb1
 
 ## 2026-11-08 上游源码选择验证
 
-构建脚本现在直接获取 `edk2-libc`、PocketJS、QuickJS-NG 的 Git 源码。 默认沿用固定提交；QuickJS-NG 固定为
+当时的构建脚本直接获取 `edk2-libc`、PocketJS、QuickJS-NG 的 Git 源码；当前 PocketJS 和 edk2-libc 已改用完整 Git 子模块，见 [上游说明](docs/upstream-sources.md)。 默认沿用固定提交；QuickJS-NG 固定为
 `rquickjs-sys 0.12.2` 对应的 `fd0a0210b7be00957751871e7e01b8291268fc29`。
 
 - 三个默认仓库均已真实下载。PocketJS 的 197 个登记文件逐一匹配旧快照； QuickJS 的核心解释器源码和头文件与旧归档一致。

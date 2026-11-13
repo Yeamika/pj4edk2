@@ -21,12 +21,13 @@
 | [入口与运行场景](entry-modes.md)                    | 选择接入方式及 boot、recovery、charging 场景          |
 | [用户层存储与调试](userspace.md)                    | 了解独立分区、页面包和 DevTools 接入                  |
 | [调试数据通道](debug-channel.md)                    | 接入默认关闭的 PocketJSDebug、字节队列与 BSP 连接通知 |
+| [共享 UI 包](ui-package.md) | 打包、读取及验证 UEFI / WASM 共用的 `.pocket` 文件 |
+| [上游源码与版本](upstream-sources.md) | 初始化子模块、选择依赖版本及重放构建清单 |
 | [默认页面与共享 UI](default-ui.md)                  | 接入页面、输入、动作及启动动画                        |
 | [裸机公共层与 BSP](no-std-bsp.md)                   | 接入 `no_std` 宿主、脚本后端及板级 I/O                |
 | [嵌入式 PocketJS 中间件](embedded-runtime.md)       | 复用官方 guest，在单片机与固件中执行脚本、输入和渲染  |
 | [裸机显示与硬件加速](rendering.md)                  | 接入普通 framebuffer、GPU/2D、DMA 和输出同步          |
 | [启动服务与页面嵌套](boot-services.md)              | 接入列表、设置、参数、运行时和显示区域，验证循环交接  |
-| 独立 Windows demo（外部桌面参考工程，未纳入本仓库） | 构建、运行界面与导出预览                              |
 
 ## 文档维护
 
@@ -41,11 +42,13 @@ Markdown 格式和链接检查方法。
 | C 头文件生成、布局和互调检查        | 已实现；宿主验证通过 | [`tools/verify.rs`](../pocketjsforedk2/tools/verify.rs)                                           |
 | EFI 驻留服务、专用堆与真实实例复用  | 设计                 | [交接协议](uefi-handoff.md)                                                                       |
 | 固件 I/O、AP 调度与有界队列         | 设计                 | [多核架构](architecture.md)                                                                       |
-| 入口调度、recovery 与 charging 后端 | 设计                 | [入口与场景](entry-modes.md)                                                                      |
-| UEFI 包读取与实体调试传输           | 设计                 | [用户层与调试](userspace.md)                                                                      |
+| 页面场景、Recovery 诊断与协议充电控制 | 已实现；依赖平台能力 | [UEFI 宿主](../uefi-runtime/README.md) |
+| 跨 EFI 驻留服务及多核场景调度 | 设计 | [入口与场景](entry-modes.md) |
+| UEFI 共享 UI 包读取 | 已实现；当前版本需验证 | [共享 UI 包](ui-package.md) |
+| 实体调试传输与独立内容分区 | 设计 | [用户层与调试](userspace.md) |
 | 调试门控、数据队列与 BSP 通知       | 已实现；宿主验证通过 | [调试数据通道](debug-channel.md)                                                                  |
 | 默认页面、共享 UI 与桌面演示        | 已实现               | [页面与验证](default-ui.md)                                                                       |
 | 平台无关宿主与用户上下文生命周期    | 已实现；需 BSP 接入  | [裸机公共层与 BSP](no-std-bsp.md)                                                                 |
 | 官方 guest 与嵌入式脚本/渲染中间件  | 已实现；宿主验证通过 | [嵌入式中间件](embedded-runtime.md)                                                               |
 
-“宿主验证通过”仅指当前工具覆盖的检查；没有完成 EFI 启动、实机或 QEMU EFI 实例接续验证。计划中的模块名不代表已经存在对应实现。
+“宿主验证通过”指 [VALIDATION.md](../VALIDATION.md) 中对应版本的历史检查，不代表当前未提交代码已经复测。普通 QEMU 启动、物理设备启动与跨 EFI 实例接续是不同验证范围；跨 EFI 实例接续仍为设计。

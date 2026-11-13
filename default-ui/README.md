@@ -20,7 +20,8 @@ Rust crate 名称保持 `pocketjs-boot-ui`，使用 `no_std + alloc`。公共服
 {
   "schema": 1,
   "scripts": ["pages/main.js", "pages/stage.js"],
-  "font": "assets/Inter-Regular.ttf"
+  "font": "assets/Inter-Regular.ttf",
+  "font_license": "assets/LICENSE-Inter.txt"
 }
 ```
 
@@ -28,10 +29,18 @@ Rust crate 名称保持 `pocketjs-boot-ui`，使用 `no_std + alloc`。公共服
 TTF/OTF 文件，当前字体图集保留原有 8 个字号槽位和 ASCII 字符范围。 所有路径相对于 UI 目录，不允许绝对路径、`..`
 或指向目录外的符号链接；缺文件直接报错。 清单只负责脚本和字体，其他资源需由脚本自行内嵌或使用现有宿主能力。
 
+默认使用原有 Inter 字体，原字体文件保持不变。构建时直接从字体生成双密度字形图集，保留笔画覆盖率，不放大小字号位图；网页 DOM 预览读取同一个原字体文件。见 [字体说明](assets/README.md)。
+可选的 `font_license` 指定随 `.pocket` 一起打包的字体许可证，路径约束与 `font` 相同。
+
 自定义页面需遵循现有宿主契约：提供 `rimuksInit(configJson)` 和
 `rimuksTick(nowMs, eventsJson)`；宿主传入 JSON 字符串，动作通过
 `bootEmit(JSON.stringify(action))` 返回。可使用现有 PocketJS `ui`、`bootBakeName`
 等接口；板级菜单配置仍由最终组合项目提供。 仅更换样式时，保留自带清单顺序并修改对应页面即可。
+
+默认页面另提供 `rimuksNameCards(configJson)`，在初始化前返回名称卡片描述数组的 JSON。
+UEFI 按这些描述预生成纹理；启动时的 `bootBakeName(specJson)` 使用同一份描述匹配，
+包括截短的文本、尺寸、颜色和字号。修改卡片样式时统一修改 `pages/boot-image.js` 的
+`nameCardSpec`，WASM 与 UEFI 会共同采用。旧外部页面未提供此钩子时保留原有按名称查找的行为。
 
 脚本入口及页面行为见[默认页面说明](../docs/default-ui.md)，运行与验证见 [仓库构建与测试说明](../README.md)。
 

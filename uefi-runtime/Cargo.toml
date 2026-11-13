@@ -16,6 +16,7 @@ charge-self-test = []
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+pj4edk2-ui-package = { path = "../crates/ui-package" }
 pocketjs-boot-context-abi = { path = "../pocketjsforedk2" }
 pocketjs-boot-assets = { path = "../crates/boot-assets" }
 pocketjs-embedded-runtime = { path = "../crates/embedded-runtime" }

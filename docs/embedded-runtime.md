@@ -17,10 +17,7 @@ PocketJS 上游提供
 使用这个 guest，加上 ESP-IDF 的分配、显示和输入适配；可选 runner 提供 FreeRTOS 任务。解释器本身不要求 Windows 或
 Linux。
 
-当前版本复用上游提交 `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f`，选取的源码及哈希见
-[`vendor/UPSTREAM.json`](../vendor/UPSTREAM.json)。官方 C guest、生成绑定、Rust UI
-和渲染器源码保持原样；vendor 根 manifest 仅缩小 workspace 成员并移除不在子集内的默认成员。 GLES
-源码仅用于解析可选依赖路径，本中间件不启用它们。
+当前版本复用上游提交 `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f`，版本由 [Git 子模块记录](../.gitmodules) 的 gitlink 固定。官方 C guest、生成绑定、Rust UI 和渲染器源码保留在完整子模块中。UEFI 构建仅在输出的独立源码副本中调整 Cargo workspace 成员，不修改上游 checkout；本中间件不启用 GLES。
 
 ## 组成
 
@@ -44,7 +41,7 @@ BSP 再实现解释器后端。
 `external-runtime`，由最终 BSP 提供 allocator、panic 和入口。
 
 这里使用官方低层 embedding 接口，由本中间件管理 guest 生命周期、UI tick 和驱动呈现，没有调用完整包启动状态机。
-传入的是可信源脚本；`.pocket` 包的读取、准入和资源注册需要另行接入，不能把 `replace_user` 当作包校验入口。
+`replace_user` 接受可信源脚本，不是包校验入口。UEFI 的 [UI 包适配层](ui-package.md) 另行验证 `.pocket` 主机 profile 和资源，再将脚本交给执行层；通用中间件不自动接受任意包。
 
 ## BSP 接入
 
@@ -79,6 +76,8 @@ input.clear();
 
 该例没有固件入口、驱动或 allocator。应用可以从 flash、分区或固件文件加载脚本；中间件不选择存储设备。 `replace_user_with`
 在挂载 guest 前提供一次 `&mut Ui`，用于加载字体 atlas、样式和纹理；不需要把资源编码进 JS 字符串。
+若资源描述来自页面脚本，可在求值后调用 `prepare_resources(page, closure)`；它保留页面状态，
+并在提供 `&mut Ui` 前完成输出设备对资源的读取。默认 UEFI 页面用它按共享 UI 描述预生成名称卡片。
 
 `replace_user` 加载脚本后由调用方显式呈现。`advance` 每次推进一个固定时间步，`present` 提交输出，`tick` 连续执行两者。
 中间件不创建线程或睡眠；同步输出会在呈现内等待设备完成，异步输出可延迟到下一次呈现或显式完成。 单个实例只允许一个执行核拥有；引导核和 UI 核之间由 BSP

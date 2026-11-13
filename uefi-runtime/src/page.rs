@@ -1,26 +1,39 @@
 //! The default boot pages on the official no_std guest, without a desktop VM.
-use alloc::{format, string::String, vec::Vec};
+use alloc::{format, vec::Vec};
 use pocketjs_boot_ui::{NameCardSpec, UiAction, UiConfig, UiEvent};
 use pocketjs_core::{Ui, spec};
 use pocketjs_embedded_runtime::{Error, InputFrameBuilder, PocketJs, UserGeneration};
 
-/// Bake names once using the same UI/raster API as the desktop. Synchronous JS
-/// name requests subsequently retrieve these prepared textures over a JS map.
-fn prepare(ui: &mut Ui, config: &UiConfig, names: &mut serde_json::Map<String, serde_json::Value>) -> Result<(), Error> {
-    for atlas in pocketjs_boot_assets::atlases(false) { if !ui.load_font_atlas(atlas) { return Err(Error::Runtime); } }
-    for entry in &config.entries {
+fn load_atlases(ui: &mut Ui, package: Option<&pj4edk2_ui_package::UiPackage>) -> Result<(), Error> {
+    for atlas in (0..8).map(|slot| package.map_or(Ok(pocketjs_boot_assets::atlases(false)[slot]), |p|p.atlas(slot)).map_err(|_|Error::InvalidConfig)).collect::<Result<Vec<_>,_>>()? { if !ui.load_font_atlas(atlas) { return Err(Error::Runtime); } }
+    Ok(())
+}
+
+/// Compatibility for older external UI packages without the preparation hook.
+fn legacy_cards(ui: &Ui, config: &UiConfig) -> Vec<NameCardSpec> {
+    config.entries.iter().map(|entry| {
         let width = ui.measure_text(&entry.name, 6) + 40.;
         let width = width.clamp(184., 340.) as u32;
-        let card = NameCardSpec { text: entry.name.clone(), size: [width, 48],
+        NameCardSpec { text: entry.name.clone(), size: [width, 48],
             radius: 8, fill: 0xff_ff_fc_f7, border: 0xff_af_7e_32,
-            ink: 0xff_69_4d_21, font_slot: 6, text_origin: [20, 8] };
-        let image = pocketjs_boot_assets::bake(&card, false).map_err(|_| Error::Runtime)?;
+            ink: 0xff_69_4d_21, font_slot: 6, text_origin: [20, 8] }
+    }).collect()
+}
+
+/// Bake the shared UI's exact specs once, then serve synchronous JS requests.
+fn prepare(ui: &mut Ui, cards: &[NameCardSpec], package: Option<&pj4edk2_ui_package::UiPackage>) -> Result<Vec<serde_json::Value>, Error> {
+    let mut names = Vec::new();
+    for card in cards {
+        card.validate().map_err(|_| Error::InvalidConfig)?;
+        let slot = card.font_slot as usize;
+        let atlas = package.map_or(Ok(pocketjs_boot_assets::atlases(false)[slot]), |p|p.atlas(slot)).map_err(|_|Error::InvalidConfig)?;
+        let image = pocketjs_boot_assets::bake_with_atlas(card, atlas).map_err(|_| Error::Runtime)?;
         let (pixels, w, h) = (image.pixels, image.width, image.height);
         let handle = ui.upload_texture(&pixels, w, h, spec::psm::PSM_8888);
         if handle < 0 { return Err(Error::OutOfMemory); }
-        names.insert(entry.name.clone(), serde_json::json!({"handle":handle,"width":w,"height":h}));
+        names.push(serde_json::json!({"spec":card,"asset":{"handle":handle,"width":w,"height":h}}));
     }
-    Ok(())
+    Ok(names)
 }
 
 pub struct BootPage {
@@ -30,22 +43,39 @@ pub struct BootPage {
 }
 impl BootPage {
     pub fn load(vm: &mut PocketJs, config: &UiConfig) -> Result<Self, Error> {
+        Self::load_with_package(vm, config, None)
+    }
+    pub fn load_with_package(vm: &mut PocketJs, config: &UiConfig, bytes: Option<&[u8]>) -> Result<Self, Error> {
+        let package=bytes.map(pj4edk2_ui_package::UiPackage::parse).transpose().map_err(|_|Error::InvalidConfig)?;
         config.validate().map_err(|_| Error::InvalidConfig)?;
-        let mut names = serde_json::Map::new();
-        let generation = vm.replace_user_with(&[], |ui| prepare(ui, config, &mut names))?;
-        let shim = format!(r#"globalThis.bootEmit = text => ui.svcSend(text);
-            globalThis.bootNameImages = {};
-            globalThis.bootBakeName = text => {{
-                const request = JSON.parse(text), value = bootNameImages[request.text];
+        let generation = vm.replace_user_with(&[], |ui| load_atlases(ui, package.as_ref()))?;
+        let shim = r#"globalThis.bootEmit = text => ui.svcSend(text);
+            globalThis.bootNameImages = new Map();
+            globalThis.bootLegacyNames = false;
+            globalThis.bootNameKey = c => JSON.stringify([c.text,c.size,c.radius,c.fill,c.border,c.ink,c.font_slot,c.text_origin]);
+            globalThis.bootBakeName = text => {
+                const request = JSON.parse(text), value = bootNameImages.get(bootLegacyNames ? request.text : bootNameKey(request));
                 if (!value) throw Error('unprepared boot name');
                 return JSON.stringify(value);
-            }};
+            };
             globalThis.bootBatteryEstimate = false;
-            globalThis.frame = () => {{}};"#, serde_json::Value::Object(names));
-        vm.evaluate(generation, &shim)?;
-        for script in pocketjs_boot_ui::scripts() { vm.evaluate(generation, script.source)?; }
-        let config = config.to_json().map_err(|_| Error::InvalidConfig)?;
-        let quoted = serde_json::to_string(&config).map_err(|_| Error::InvalidConfig)?;
+            globalThis.frame = () => {};"#;
+        vm.evaluate(generation, shim)?;
+        if let Some(package)=package.as_ref() { vm.evaluate(generation,package.javascript)?; }
+        else { for script in pocketjs_boot_ui::scripts() { vm.evaluate(generation, script.source)?; } }
+        let config_json = config.to_json().map_err(|_| Error::InvalidConfig)?;
+        let quoted = serde_json::to_string(&config_json).map_err(|_| Error::InvalidConfig)?;
+        vm.evaluate(generation, &format!("ui.svcSend(typeof rimuksNameCards==='function' ? rimuksNameCards({quoted}) : 'null');"))?;
+        let bytes = vm.receive(generation)?.ok_or(Error::Runtime)?;
+        let cards: Option<Vec<NameCardSpec>> = serde_json::from_slice(&bytes).map_err(|_| Error::InvalidConfig)?;
+        if cards.as_ref().is_some_and(|cards| cards.len() > config.entries.len()) { return Err(Error::InvalidConfig); }
+        let legacy = cards.is_none();
+        let names = vm.prepare_resources(generation, |ui| {
+            let cards = cards.unwrap_or_else(|| legacy_cards(ui, config));
+            prepare(ui, &cards, package.as_ref())
+        })?;
+        let names = serde_json::to_string(&names).map_err(|_| Error::InvalidConfig)?;
+        vm.evaluate(generation, &format!("bootLegacyNames={legacy}; for(const n of {names}) bootNameImages.set(bootLegacyNames ? n.spec.text : bootNameKey(n.spec),n.asset);"))?;
         vm.evaluate(generation, &format!("rimuksInit({quoted});"))?;
         Ok(Self { generation, #[cfg(target_os="none")] timing:core::cell::Cell::new([0;3]) })
     }
@@ -81,6 +111,110 @@ mod tests {
     // Force the dev-only QuickJS library into the final native test executable.
     use rquickjs_sys as _;
     #[test]
+    fn prepared_cards_use_shared_colors_and_ellipsized_names() {
+        let (width,height)=(720,1280);
+        let mut vm=PocketJs::new(Config{width,height,tick_hz:30,js_heap_bytes:16*1024*1024,
+            js_stack_bytes:512*1024,interrupt_polls:100_000,frame_buffer_budget:width as usize*height as usize*4}).unwrap();
+        let mut config=pocketjs_boot_ui::default_config();config.viewport=[width,height];config.timeout_seconds=0;
+        config.entries[0].name="A very long Linux distribution name needing truncation".into();
+        let page=BootPage::load(&mut vm,&config).unwrap();
+        vm.evaluate(page.generation,r#"
+            const card=Rimuks.nameCardSpec(Rimuks.cfg.entries[0]);
+            if(!card.text.endsWith('...')||card.text===Rimuks.cfg.entries[0].name) throw Error('name not shortened');
+            if(ui.measureText(card.text,6)>card.size[0]-40) throw Error('name overflow');
+            if(card.border!==Rimuks.color(Rimuks.mix(Rimuks.C.softBorder,Rimuks.C.accent,0.72))) throw Error('wrong card color');
+            if(!bootNameImages.has(bootNameKey(card))) throw Error('different prepared spec');
+            const original=JSON.parse(bootBakeName(JSON.stringify(card)));
+            const reordered={text_origin:card.text_origin,font_slot:card.font_slot,ink:card.ink,border:card.border,fill:card.fill,radius:card.radius,size:card.size,text:card.text};
+            if(JSON.parse(bootBakeName(JSON.stringify(reordered))).handle!==original.handle) throw Error('property order changed cache key');
+            let rejected=false;
+            try{bootBakeName(JSON.stringify({...card,border:0}));}catch(_){rejected=true;}
+            if(!rejected) throw Error('host silently ignored style');
+        "#).unwrap();
+        page.tick(&mut vm,0,&[UiEvent::Key{key:"Enter".into()}]).unwrap();
+        page.tick(&mut vm,16,&[UiEvent::Key{key:"Enter".into()}]).unwrap();
+        assert!(matches!(page.tick(&mut vm,1200,&[]).unwrap().as_slice(),[UiAction::Boot{..}]));
+    }
+    #[test]
+    fn settings_keypad_limits_input_and_reload_emits_action() {
+        let (width,height)=(1280,800);
+        let mut vm=PocketJs::new(Config{width,height,tick_hz:30,js_heap_bytes:16*1024*1024,
+            js_stack_bytes:512*1024,interrupt_polls:100_000,frame_buffer_budget:width as usize*height as usize*4}).unwrap();
+        vm.add_display(FramebufferDisplay::new(alloc::vec![0;width as usize*height as usize*4],
+            width,height,width as usize*4,PixelFormat::Argb8888).unwrap(),RendererId::SOFTWARE).unwrap();
+        let mut config=pocketjs_boot_ui::default_config();config.viewport=[width,height];
+        let page=BootPage::load(&mut vm,&config).unwrap();
+        page.tick(&mut vm,0,&[UiEvent::Key{key:"F2".into()}]).unwrap();
+        vm.evaluate(page.generation,r#"
+            if(Rimuks.keypadKeys.length!==12) throw Error('keypad size');
+            if(Rimuks.keypadOpen) throw Error('keypad initially visible');
+            if(Rimuks.settingsWidth!==448) throw Error('empty keyboard space');
+            Rimuks.settingsEvent({type:'click',x:Rimuks.settingsX+230,y:Rimuks.settingsY+34});
+            if(!Rimuks.keypadOpen) throw Error('input did not open keypad');
+            Rimuks.updateSettings();
+            if(Rimuks.settingsWidth!==680) throw Error('keypad panel did not expand');
+            Rimuks.settingsSelectAll=true;
+            Rimuks.settingsEvent({type:'click',x:Rimuks.settingsX+448+2*72+10,y:Rimuks.settingsY+24+2*62+10});
+            Rimuks.keypadInput('9'); Rimuks.keypadInput('1');
+            if(Rimuks.pendingText!=='99'||Rimuks.pendingTimeout!==99) throw Error('two-digit bound');
+            Rimuks.keypadInput('Delete');
+            if(Rimuks.pendingText!=='9') throw Error('backspace');
+            Rimuks.settingsSelectAll=true; Rimuks.keypadInput('0');
+            if(Rimuks.pendingTimeout!==0) throw Error('zero disables');
+            Rimuks.keypadInput('Enter');
+            Rimuks.updateSettings();
+            if(Rimuks.settingsWidth!==448) throw Error('keypad panel did not collapse');
+        "#).unwrap();
+        assert!(matches!(page.tick(&mut vm,16,&[]).unwrap().as_slice(),[UiAction::SetTimeout{seconds:0}]));
+        vm.evaluate(page.generation,"Rimuks.settingsSaving=false; Rimuks.reloadBootList(); Rimuks.reloadBootList();").unwrap();
+        assert!(matches!(page.tick(&mut vm,32,&[]).unwrap().as_slice(),[UiAction::Recovery{operation}] if operation=="reload-list"));
+    }
+    #[test]
+    #[ignore = "requires PJ4EDK2_TEST_UI_PACKAGE built by tools/pack-ui.py"]
+    fn external_pocket_package_runs_and_rejects_corruption() {
+        let mut bytes=std::fs::read(std::env::var("PJ4EDK2_TEST_UI_PACKAGE").unwrap()).unwrap();
+        let (width,height)=(1280,800);
+        let mut vm=PocketJs::new(Config{width,height,tick_hz:30,js_heap_bytes:16*1024*1024,
+            js_stack_bytes:512*1024,interrupt_polls:100_000,frame_buffer_budget:width as usize*height as usize*4}).unwrap();
+        vm.add_display(FramebufferDisplay::new(alloc::vec![0;width as usize*height as usize*4],width,height,width as usize*4,PixelFormat::Argb8888).unwrap(),RendererId::SOFTWARE).unwrap();
+        let mut config=pocketjs_boot_ui::default_config();config.viewport=[width,height];config.timeout_seconds=0;
+        let page=BootPage::load_with_package(&mut vm,&config,Some(&bytes)).unwrap();
+        page.tick(&mut vm,0,&[UiEvent::Key{key:"F2".into()}]).unwrap();
+        vm.evaluate(page.generation,"if(!Rimuks.settingsOpen || Rimuks.settingsWidth!==448)throw Error('packaged UI failed');").unwrap();
+        bytes[120]^=1;
+        assert!(BootPage::load_with_package(&mut vm,&config,Some(&bytes)).is_err());
+        for end in [0,32,100,bytes.len()-1] {assert!(pj4edk2_ui_package::UiPackage::parse(&bytes[..end]).is_err());}
+    }
+    #[test]
+    fn list_scroll_animates_and_drag_tracks_without_booting() {
+        let (width,height)=(1280,800);
+        let mut vm=PocketJs::new(Config{width,height,tick_hz:30,js_heap_bytes:16*1024*1024,
+            js_stack_bytes:512*1024,interrupt_polls:100_000,frame_buffer_budget:width as usize*height as usize*4}).unwrap();
+        vm.add_display(FramebufferDisplay::new(alloc::vec![0;width as usize*height as usize*4],
+            width,height,width as usize*4,PixelFormat::Argb8888).unwrap(),RendererId::SOFTWARE).unwrap();
+        let mut config=pocketjs_boot_ui::default_config();config.viewport=[width,height];config.timeout_seconds=0;
+        let mut extra=config.entries[0].clone();extra.id="extra-a".into();config.entries.push(extra.clone());
+        extra.id="extra-b".into();config.entries.push(extra);
+        let page=BootPage::load(&mut vm,&config).unwrap();
+        page.tick(&mut vm,0,&[]).unwrap();
+        vm.evaluate(page.generation,r#"
+            Rimuks.bootEvent({type:'scroll',delta:-1});
+        "#).unwrap();
+        page.tick(&mut vm,16,&[]).unwrap();
+        vm.evaluate(page.generation,r#"
+            if(!(Rimuks.visualScroll>0 && Rimuks.visualScroll<1)) throw Error('scroll jumped');
+            const y=Rimuks.listY+100;
+            Rimuks.bootPointer({x:600,y,down:true});
+            Rimuks.pointer.down=true;
+            Rimuks.bootPointer({x:600,y:y-44,down:true});
+            if(Math.abs(Rimuks.visualScroll-Rimuks.scrollOffset)>0.001) throw Error('drag did not follow');
+            Rimuks.bootPointer({x:600,y:y-44,down:false});Rimuks.pointer.down=false;
+            if(Rimuks.listDrag || Rimuks.booting) throw Error('drag booted or stayed captured');
+        "#).unwrap();
+        for now in (32..1024).step_by(16) {page.tick(&mut vm,now,&[]).unwrap();}
+        vm.evaluate(page.generation,"if(Math.abs(Rimuks.visualScroll-Rimuks.scrollOffset)>0.01)throw Error('scroll did not settle');").unwrap();
+    }
+    #[test]
     fn failed_launch_returns_to_a_manual_menu_and_can_retry() {
         let (width,height)=(1280,800);
         let mut vm=PocketJs::new(Config{width,height,tick_hz:30,js_heap_bytes:16*1024*1024,
@@ -106,6 +240,48 @@ mod tests {
         page.tick(&mut vm,10040,&[UiEvent::Key{key:"Enter".into()}]).unwrap();
         assert!(matches!(page.tick(&mut vm,12000,&[]).unwrap().as_slice(),[UiAction::Boot{..}]));
         assert!(page.tick(&mut vm,13000,&[]).unwrap().is_empty());
+    }
+    #[test]
+    fn fastboot_pauses_auto_boot_and_blocks_shutdown_then_releases_menu() {
+        let (width,height)=(1280,800);
+        let mut vm=PocketJs::new(Config{width,height,tick_hz:30,js_heap_bytes:16*1024*1024,
+            js_stack_bytes:512*1024,interrupt_polls:100_000,frame_buffer_budget:width as usize*height as usize*4}).unwrap();
+        let mut config=pocketjs_boot_ui::default_config();config.viewport=[width,height];config.timeout_seconds=3;
+        let page=BootPage::load(&mut vm,&config).unwrap();
+        assert!(page.tick(&mut vm,0,&[UiEvent::FastbootState{busy:true}]).unwrap().is_empty());
+        vm.evaluate(page.generation,"Rimuks.beginBoot();Rimuks.requestShutdown();").unwrap();
+        assert!(page.tick(&mut vm,5000,&[]).unwrap().is_empty());
+        vm.evaluate(page.generation,"if(Rimuks.autoActive||Rimuks.booting||Rimuks.poweringOff)throw Error('Fastboot lost ownership');").unwrap();
+        page.tick(&mut vm,5016,&[UiEvent::FastbootState{busy:false}]).unwrap();
+        vm.evaluate(page.generation,"Rimuks.requestShutdown();").unwrap();
+        assert_eq!(page.tick(&mut vm,5032,&[]).unwrap(),[UiAction::Shutdown]);
+    }
+    #[test]
+    fn fastboot_holds_an_existing_boot_animation_until_the_transfer_finishes() {
+        let (width,height)=(1280,800);
+        let mut vm=PocketJs::new(Config{width,height,tick_hz:30,js_heap_bytes:16*1024*1024,
+            js_stack_bytes:512*1024,interrupt_polls:100_000,frame_buffer_budget:width as usize*height as usize*4}).unwrap();
+        let mut config=pocketjs_boot_ui::default_config();config.viewport=[width,height];config.timeout_seconds=0;
+        let page=BootPage::load(&mut vm,&config).unwrap();
+        vm.evaluate(page.generation,"Rimuks.beginBoot();if(!Rimuks.booting)throw Error('boot did not begin');").unwrap();
+        assert!(page.tick(&mut vm,500,&[UiEvent::FastbootState{busy:true}]).unwrap().is_empty());
+        assert!(page.tick(&mut vm,2000,&[]).unwrap().is_empty());
+        vm.evaluate(page.generation,"if(Rimuks.emitted)throw Error('boot escaped during transfer');").unwrap();
+        assert!(matches!(page.tick(&mut vm,2016,&[UiEvent::FastbootState{busy:false}]).unwrap().as_slice(),[UiAction::Boot{..}]));
+        assert!(page.tick(&mut vm,2032,&[]).unwrap().is_empty());
+    }
+    #[test]
+    fn fastboot_ownership_precedes_a_shutdown_click_in_the_same_frame() {
+        let (width,height)=(1280,800);
+        let mut vm=PocketJs::new(Config{width,height,tick_hz:30,js_heap_bytes:16*1024*1024,
+            js_stack_bytes:512*1024,interrupt_polls:100_000,frame_buffer_budget:width as usize*height as usize*4}).unwrap();
+        let mut config=pocketjs_boot_ui::default_config();config.viewport=[width,height];config.timeout_seconds=0;
+        let page=BootPage::load(&mut vm,&config).unwrap();
+        vm.evaluate(page.generation,r#"rimuksTick(0,JSON.stringify([
+            {type:'click',x:Rimuks.cardX+160,y:Rimuks.bootActionsY+8},
+            {type:'fastboot_state',busy:true}]));
+            if(Rimuks.poweringOff)throw Error('shutdown preceded USB ownership');"#).unwrap();
+        assert!(page.tick(&mut vm,16,&[]).unwrap().is_empty());
     }
     #[test]
     fn live_battery_readings_repaint_only_a_small_area() {

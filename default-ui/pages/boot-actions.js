@@ -14,7 +14,7 @@
         R.label(R.stageLabel, 'recovery'); R.enterScene();
     };
     R.requestShutdown = () => {
-        if (!R.poweringOff) { R.poweringOff = true; R.emit({type: 'shutdown'}); }
+        if (!R.poweringOff && !R.fastbootBusy) { R.poweringOff = true; R.emit({type: 'shutdown'}); }
     };
     R.updateBootActionFocus = () => {
         if (R.scene !== 'boot') return;

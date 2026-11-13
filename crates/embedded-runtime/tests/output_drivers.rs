@@ -279,6 +279,24 @@ fn deferred_accelerator_keeps_textures_and_drains_before_user_replacement_or_dro
 }
 
 #[test]
+fn host_resource_preparation_drains_device_reads_and_preserves_guest_state() {
+    let (mut vm, device) = accelerated(false);
+    let page = vm.replace_user(&[TEXTURE]).unwrap();
+    let _ = vm.receive(page).unwrap();
+    vm.present(page).unwrap();
+    assert!(device.borrow().pending.is_some());
+    vm.prepare_resources(page, |ui| {
+        assert!(device.borrow().pending.is_none());
+        assert!(ui.upload_texture(&[9, 8, 7, 255], 1, 1, 3) >= 0);
+        Ok(())
+    }).unwrap();
+    vm.evaluate(page, "if(marker!=='old') throw Error('host preparation reset guest');").unwrap();
+    let next = vm.replace_user(&[]).unwrap();
+    assert!(matches!(vm.prepare_resources::<()>(page, |_| panic!("stale page accessed UI")), Err(Error::StaleGeneration)));
+    vm.prepare_resources(next, |_| Ok(())).unwrap();
+}
+
+#[test]
 fn renderer_failure_is_terminal_and_prevents_releasing_page_before_error_is_reported() {
     let (mut vm, device) = accelerated(false);
     let page = vm

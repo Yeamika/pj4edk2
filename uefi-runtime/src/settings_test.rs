@@ -23,7 +23,7 @@ pub fn run(page:&BootPage, vm:&mut PocketJs, config:&UiConfig, settings:&mut Set
     if settings.sequence()!=0 && !restoring { return Err("self-test refuses existing settings".into()); }
     let before=snapshot(page,vm)?;
     if restoring && (before.timeout_seconds!=19 || before.default_entry_id.as_deref()!=Some(second.id.as_str())) {
-        return Err("PJB_SETTINGS_TEST reload mismatch".into());
+        return Err("PJ4EDK2_SETTINGS_TEST reload mismatch".into());
     }
     let seconds=if restoring {original.timeout_seconds} else {19};
     let index=if restoring {original.entries.iter().position(|e|Some(&e.id)==original.default_entry_id.as_ref()).unwrap_or(0)} else {1};
@@ -44,8 +44,8 @@ pub fn run(page:&BootPage, vm:&mut PocketJs, config:&UiConfig, settings:&mut Set
     let after=snapshot(page,vm)?;
     if after.timeout_seconds!=seconds || after.default_entry_id.as_deref()!=Some(config.entries[index].id.as_str()) ||
         after.settings_dirty || after.settings_saving || after.default_saving || after.default_save_failed {
-        return Err(format!("PJB_SETTINGS_TEST page mismatch {after:?}"));
+        return Err(format!("PJ4EDK2_SETTINGS_TEST page mismatch {after:?}"));
     }
-    Ok(format!("PJB_SETTINGS_TEST {} sequence={} timeout={} default={:?} page_ack=true",
+    Ok(format!("PJ4EDK2_SETTINGS_TEST {} sequence={} timeout={} default={:?} page_ack=true",
         if restoring {"RELOAD_AND_RESTORE_OK"} else {"SAVE_OK"},settings.sequence(),after.timeout_seconds,after.default_entry_id))
 }

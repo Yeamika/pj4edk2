@@ -3,6 +3,9 @@
 独立维护 UEFI 引导菜单的公共接口、PocketJS 运行时和默认页面，输出 `PocketJS.a` 及配套的 UEFI ABI 支持库。 依赖通用
 EDK II 和 UEFI 协议，可由不同平台接入。板级驱动、菜单配置和最终固件组合由消费项目提供； 当前验证的架构为 AArch64。
 
+本页对应 `uefi` 分支。其他组件与实验环境见仓库的
+[分支导航](https://github.com/Yeamika/pj4edk2/tree/main)。
+
 ## 源码组成
 
 | 目录                       | 内容                                                                  |
@@ -11,14 +14,17 @@ EDK II 和 UEFI 协议，可由不同平台接入。板级驱动、菜单配置�
 | `default-ui/`              | 默认菜单、设置、恢复和充电页面，以及字体资源                          |
 | `uefi-runtime/`            | Rust 运行时和 UEFI C 胶合：绘制、输入、硬件协议、设置存储及子应用启动 |
 | `crates/embedded-runtime/` | 通用嵌入式执行层：JS 实例、页面上下文、输入和渲染适配                 |
+| `crates/rendering/` | UEFI 与 WASM 共用的像素对齐与纹理采样规则 |
+| `crates/ui-package/` | 共享 `.pocket` UI 包的读取、校验与资源访问 |
+| `tools/` | 依赖获取、UI 输入处理、包构建及测试工具 |
 | `crates/debug-channel/`    | 有界调试消息队列                                                      |
 | `crates/boot-assets/`      | 字体图集等共享资源的构建                                              |
-| `vendor/pocketjs/`         | 供直接 Cargo 接入及历史核对的固定快照；构建脚本使用下载的上游源码     |
+| `vendor/pocketjs/`         | 完整上游源码的固定提交 Git 子模块，供固件与 WASM 共用     |
 | `docs/`                    | 模块、接入说明及跨 EFI 实例交接等设计文档                             |
-| `edk2-libc/`               | 保留的固定版本子模块；构建脚本从选定上游下载 C 库                     |
+| `vendor/edk2-libc/`               | 固定提交 Git 子模块，构建直接读取此目录                     |
 
 版本固定在 [sources.lock.json](sources.lock.json)、各 `Cargo.lock` 和
-`rust-toolchain.toml`。上游引擎文件校验表位于 `vendor/UPSTREAM.json`。接口只在 `pocketjsforedk2`
+`rust-toolchain.toml`。PocketJS 与 edk2-libc 的版本由 Git 子模块记录，构建清单记录实际 HEAD。接口只在 `pocketjsforedk2`
 定义，消费端不另存一份公共 ABI。
 
 UEFI 宿主包名为 `pocketjs-uefi-runtime`，通用执行层包名为 `pocketjs-embedded-runtime`。
@@ -31,6 +37,7 @@ make、主机 GCC/G++、UUID 开发头文件和 AArch64 GNU GCC/binutils。Rust 
 `panic=abort`，不启用 LTO。
 
 ```sh
+git submodule update --init vendor/pocketjs vendor/edk2-libc
 ./build.sh --output /path/to/build/pocketjs \
   --source-cache /path/to/cache/upstream
 ```
@@ -38,21 +45,18 @@ make、主机 GCC/G++、UUID 开发头文件和 AArch64 GNU GCC/binutils。Rust 
 脚本独立下载通用 EDK II 及其固定的 BaseTools、MdeModulePkg Brotli 子模块，并在输出目录编译 BaseTools。
 无需任何板级仓库。构建输出必须位于源码树外；Cargo 缓存使用正常的 `CARGO_HOME`，目标文件默认放在输出目录。
 
-构建脚本自动获取 EDK II、`edk2-libc`、PocketJS、QuickJS-NG 的上游 Git 源码，默认使用
-`sources.lock.json` 中的固定提交。可以单独选择仓库、提交、标签、分支或最新提交：
+PocketJS 和 edk2-libc 直接使用已初始化的 `vendor/` 子模块；构建不会下载或切换这两个仓库。
+切换版本时，先在对应子模块中 checkout 指定提交；更新后由父项目记录新的 gitlink。
+EDK II 与 QuickJS-NG 仍支持指定上游、提交或最新版本：
 
 ```sh
 ./build.sh --output /path/to/build/pocketjs \
   --source-cache /path/to/cache/upstream \
-  --source-ref pocketjs=latest \
-  --source-repo quickjs=https://github.com/quickjs-ng/quickjs.git \
-  --source-ref quickjs=fd0a0210b7be00957751871e7e01b8291268fc29
+  --source-ref quickjs=latest
 ```
 
-`latest` 指所选仓库默认分支的 HEAD；分支和标签每次重新解析。构建把实际提交写入 `upstream.lock.json`，下次用
-`--source-lock /path/to/build/upstream.lock.json` 重放。`--source-ref edk2=REV` 和
-`--source-repo edk2=URL` 可选择通用 EDK II 的其他版本或 fork。 Rust
-阶段只解析另外三个上游；平台组合工程指定自己使用的 EDK II。 具体用法、缓存和编译机分工见
+构建把实际提交写入 `upstream.lock.json`，可用 `--source-lock FILE` 重放；子模块必须已检出清单中的提交。
+Rust 阶段不下载 EDK II；平台组合工程可指定自己使用的 EDK II。具体用法见
 [上游源码选择](docs/upstream-sources.md)。
 
 其他项目可以传入自己的默认 UI 目录和输出目录：
@@ -124,5 +128,24 @@ bash test.sh
 `--rust-only`，UEFI C 测试在本地另行执行。 设置 `PJB_RUN_CARGO_TESTS=1` 可额外验证外部 UI 的真实嵌入，以及共享
 Cargo 缓存下脚本、字体和目录切换后的重编译。
 
-本仓库不依赖旧研究目录或 Windows 演示工程。底层模块文档保留接口设计与调试说明，当前构建入口以本页为准。实际验证范围见
+底层模块文档区分已实现功能与设计目标，当前构建入口以本页为准。历史验证范围见
 [VALIDATION.md](VALIDATION.md)。
+
+## 共享 UI 包
+
+[共享 `.pocket` UI 包](docs/ui-package.md) 使用 PocketJS v2 容器，包含源 JavaScript、原字体和烘焙字形图集。
+UEFI 与浏览器预览读取相同的 UI 包；这不代表两者具有相同的执行环境或性能。
+
+```sh
+python3 tools/pack-ui.py --output "$BUILD_DIR/ui.pocket" --target-dir "$CARGO_TARGET_DIR"
+```
+
+调用前将 `BUILD_DIR` 和 `CARGO_TARGET_DIR` 设置为源码树外的输出目录。
+UEFI 可从选定 ESP 的 `EFI/BOOT/pj4edk/ui.pocket` 读取包；缺失时使用嵌入页面，存在但无效时拒绝执行。
+Web 预览由独立的 `webui-viewer` 分支维护，QEMU 完整启动环境由 `qemu-arm64-small` 分支维护。
+这些实验分支的发布状态以远端分支列表为准。
+
+## 待办
+
+- 可选 Fastboot 协议已有实现：菜单逐帧轮询，传输时暂停自动启动和关机，进入 EFI 子程序前停止 USB。接口见 `pocketjsforedk2/include/pj4edk2_fastboot.h`，通用运行时不依赖 LK 或具体芯片。
+- W202DS 上菜单与 USB 同时运行、拔插重连及刷写仍需实机验收。宿主协议测试不能代替板级验证。

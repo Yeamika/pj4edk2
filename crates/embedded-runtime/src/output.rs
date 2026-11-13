@@ -46,7 +46,7 @@ impl Presentation {
     }
     pub fn present(&mut self, ui: &mut Ui) -> Result<(), PresentError> {
         ui.draw();
-        let result = self.0.present(ui.current_draw_list(), None, ui);
+        let result = self.0.present(ui.current_draw_list(), None, &pj4edk2_rendering::PixelResources(&*ui));
         self.track_textures(ui);
         result
     }

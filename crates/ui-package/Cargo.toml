@@ -1,0 +1,6 @@
+[package]
+name="pj4edk2-ui-package"
+version="0.1.0"
+edition="2024"
+[dependencies]
+pocket-package={path="../../vendor/pocketjs/engine/package"}

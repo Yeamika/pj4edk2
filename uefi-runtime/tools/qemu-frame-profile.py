@@ -178,7 +178,7 @@ def main():
                                        args=(pid, args.cpu_budget, control_cpu, done), daemon=True)
             limiter.start()
         deadline = time.monotonic() + 30
-        while 'PJB_FRAME_OK' not in (run / 'serial.log').read_text(errors='replace'):
+        while 'PJ4EDK2_FRAME_OK' not in (run / 'serial.log').read_text(errors='replace'):
             if trace.error or time.monotonic() > deadline:
                 raise RuntimeError(trace.error or 'no first frame')
             time.sleep(.01)

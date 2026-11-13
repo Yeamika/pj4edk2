@@ -10,7 +10,7 @@ a=p.parse_args();root=Path(__file__).resolve().parents[1];edk=a.edk2.resolve();l
 pkg=a.output.resolve()/'PocketJsPkg';pkg.mkdir(parents=True,exist_ok=True)
 upstream=root.parent/'vendor/pocketjs'
 for source,target in [(a.quickjs,pkg/'QuickJsCore/quickjs'),(upstream/'engine/guest-quickjs',pkg/'QuickJsCore/guest'),(upstream/'contracts/generated',pkg/'QuickJsCore/contracts')]:
- shutil.copytree(source,target,dirs_exist_ok=True)
+ shutil.copytree(source,target,dirs_exist_ok=True,ignore=shutil.ignore_patterns('.git'))
 # The official guest remains unchanged. QuickJS's own single-threaded branch
 # is also appropriate to this UEFI owner; select it with an explicit port macro.
 cutils=pkg/'QuickJsCore/quickjs/cutils.h'
@@ -99,7 +99,9 @@ config_bytes=json.dumps(configuration,ensure_ascii=True,separators=(',',':')).en
 if len(config_bytes)>65536: raise ValueError('platform configuration too large')
 (pkg/'PlatformConfig.c').write_text('#include <stddef.h>\nstatic const unsigned char Config[] = {'+','.join(map(str,config_bytes))+'};\nconst unsigned char *pjb_platform_config(size_t *length) { *length = sizeof(Config); return Config; }\n')
 shutil.copy2(root.parent/'pocketjsforedk2/include/pocketjs_boot_context.h',pkg/'pocketjs_boot_context.h')
-for name in ['Entry.c','TimeCompat.c','Chainload.c','Hardware.c','Settings.c']:
+shutil.copy2(root.parent/'pocketjsforedk2/include/pj4edk2_fastboot.h',pkg/'pj4edk2_fastboot.h')
+shutil.copy2(root.parent/'pocketjsforedk2/include/pj4edk2_display.h',pkg/'pj4edk2_display.h')
+for name in ['Entry.c','TimeCompat.c','Chainload.c','Hardware.c','Settings.c','Discovery.c','Esp.h','Fastboot.c','Display.c']:
  shutil.copy2(root/'edk2'/name,pkg/name)
 (pkg/'PocketJs.inf').write_text('''[Defines]
   INF_VERSION = 0x00010006
@@ -115,6 +117,9 @@ for name in ['Entry.c','TimeCompat.c','Chainload.c','Hardware.c','Settings.c']:
   Chainload.c
   Hardware.c
   Settings.c
+  Discovery.c
+  Fastboot.c
+  Display.c
 [Packages]
   MdePkg/MdePkg.dec
   ShellPkg/ShellPkg.dec
@@ -134,6 +139,7 @@ for name in ['Entry.c','TimeCompat.c','Chainload.c','Hardware.c','Settings.c']:
   PocketJsCore
   QuickJsCore
 [Protocols]
+  gEfiGraphicsOutputProtocolGuid
   gEfiLoadedImageProtocolGuid
   gEfiSimpleFileSystemProtocolGuid
   gEfiFirmwareVolume2ProtocolGuid

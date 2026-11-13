@@ -4,6 +4,8 @@
 #include <Library/UefiBootServicesTableLib.h>
 #define PJB_EDK2
 #include "pocketjs_boot_context.h"
+UINTN pjb_fastboot_before_boot(VOID);
+UINTN pjb_fastboot_start(VOID);
 
 static EFI_STATUS Platform(PJB_PLATFORM_PROTOCOL **Protocol)
 {
@@ -85,10 +87,13 @@ UINTN pjb_shutdown(EFI_SYSTEM_TABLE *System)
   EFI_STATUS Status,Resume;
   if (System==NULL || System->RuntimeServices==NULL || System->RuntimeServices->ResetSystem==NULL)
     return EFI_UNSUPPORTED;
-  Status=pjb_quiesce_hardware(1);
+  Status=pjb_fastboot_before_boot();
   if (EFI_ERROR(Status)) return Status;
+  Status=pjb_quiesce_hardware(1);
+  if (EFI_ERROR(Status)) { pjb_fastboot_start();return Status; }
   System->RuntimeServices->ResetSystem(EfiResetShutdown,EFI_SUCCESS,0,NULL);
   /* Successful shutdown cannot return. Restore the UI's hardware on failure. */
   Resume=pjb_quiesce_hardware(0);
+  pjb_fastboot_start();
   return EFI_ERROR(Resume)?Resume:EFI_DEVICE_ERROR;
 }

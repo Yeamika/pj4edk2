@@ -50,6 +50,18 @@ class UiInputsTest(unittest.TestCase):
         (self.ui/'font.ttf').write_bytes(b'different-font')
         self.assertNotEqual(second, self.identity())
 
+    def test_font_license_is_tracked_and_contained(self):
+        (self.ui/'license.txt').write_text('font license')
+        self.config['font_license'] = 'license.txt'
+        self.write_config()
+        before = self.identity()
+        (self.ui/'license.txt').write_text('updated font license')
+        self.assertNotEqual(before, self.identity())
+        self.config['font_license'] = '../outside.txt'
+        self.write_config()
+        with self.assertRaises(ValueError):
+            self.identity()
+
     def test_missing_and_invalid_inputs(self):
         for scripts in ([], ['missing.js'], ['one.js', 'one.js'], ['../one.js'], ['/one.js'], [42]):
             with self.subTest(scripts=scripts):

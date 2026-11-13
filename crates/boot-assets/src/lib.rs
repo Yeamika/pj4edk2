@@ -4,6 +4,6 @@ extern crate alloc;
 mod fonts;
 mod name_card;
 pub use fonts::atlases;
-pub use name_card::{NameCardImage, bake};
+pub use name_card::{NameCardImage, bake, bake_with_atlas};
 #[derive(Debug)]
 pub enum BakeError { InvalidSpec(&'static str), InvalidFont }

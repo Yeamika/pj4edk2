@@ -13,6 +13,7 @@ import subprocess
 
 NAMES = ('edk2-libc', 'pocketjs', 'quickjs')
 ALL_NAMES = ('edk2', *NAMES)
+SUBMODULES = {'pocketjs': 'vendor/pocketjs', 'edk2-libc': 'vendor/edk2-libc'}
 BROTLI = 'BaseTools/Source/C/BrotliCompress/brotli'
 BROTLI_PATHS = (BROTLI, 'MdeModulePkg/Library/BrotliCustomDecompressLib/brotli')
 POCKETJS_MEMBERS = (
@@ -49,6 +50,8 @@ def selections(repo, lock=None, source_repos=(), source_refs=(), with_edk2=False
     defaults = json.loads((repo/'sources.lock.json').read_text())['dependencies']
     supplied = json.loads(Path(lock).read_text())['dependencies'] if lock else defaults
     repos, refs = overrides(source_repos), overrides(source_refs)
+    for name in SUBMODULES.keys() & (repos.keys() | refs.keys()):
+        raise ValueError(f'{name} is a Git submodule; select its repository/revision in {SUBMODULES[name]} before building')
     if not with_edk2 and ('edk2' in repos or 'edk2' in refs):
         raise ValueError('EDK II selection requires --with-edk2; the Rust stage does not use EDK II')
     result = {}
@@ -173,6 +176,19 @@ def prepare_edk2_submodules(root):
     return result
 
 
+def inspect_submodule(repo, name):
+    root = repo/SUBMODULES[name]
+    if not (root/'.git').exists():
+        raise ValueError(f'Initialize the dependency first: git submodule update --init {SUBMODULES[name]}')
+    if Path(git(root, 'rev-parse', '--show-toplevel')).resolve() != root.resolve():
+        raise ValueError(f'Not an initialized Git submodule: {SUBMODULES[name]}')
+    if git(root, 'status', '--porcelain', '--untracked-files=all'):
+        raise ValueError(f'{name}: submodule has unrecorded changes; commit them or select a clean revision')
+    commit = git(root, 'rev-parse', 'HEAD')
+    return {'repository': git(root, 'remote', 'get-url', 'origin'), 'commit': commit,
+            'requested_ref': commit, 'tree': git(root, 'rev-parse', 'HEAD^{tree}')}, root
+
+
 def resolve(repo, cache, lock=None, source_repos=(), source_refs=(), with_edk2=False, edk2=None):
     if edk2 is not None and ('edk2' in overrides(source_repos) or 'edk2' in overrides(source_refs)):
         raise ValueError('Choose either --edk2 or an upstream edk2 selection')
@@ -180,7 +196,14 @@ def resolve(repo, cache, lock=None, source_repos=(), source_refs=(), with_edk2=F
     record, paths = {'schema': 1, 'dependencies': {}}, {}
     with cache_lock(cache):
         for name, value in selected.items():
-            record['dependencies'][name], path = checkout(cache, name, value)
+            if name in SUBMODULES:
+                entry, path = inspect_submodule(repo, name)
+                if lock and (entry['commit'] != value['ref'] or
+                             entry['repository'].removesuffix('.git') != value['repository'].removesuffix('.git')):
+                    raise ValueError(f'{name}: submodule differs from source lock; check out the recorded repository/revision first')
+                record['dependencies'][name] = entry
+            else:
+                record['dependencies'][name], path = checkout(cache, name, value)
             if name == 'edk2':
                 inspect_edk2(path)
                 record['dependencies'][name]['submodules'] = prepare_edk2_submodules(path)

@@ -100,7 +100,7 @@ def throttle(pid, percentage, control_cpu, finished):
 def samples(text):
     result = []
     for line in text.splitlines():
-        if 'PJB_FRAME_SLOW' not in line:
+        if 'PJ4EDK2_FRAME_SLOW' not in line:
             continue
         row = {key: int(value) for key, value in
                re.findall(r'(\w+)=([0-9]+)', line)}
@@ -166,7 +166,7 @@ def main():
                                        args=(pid, args.cpu_budget, control_cpu, done), daemon=True)
             limiter.start()
         deadline = time.monotonic() + 30
-        while 'PJB_FRAME_OK' not in (run / 'serial.log').read_text(errors='replace'):
+        while 'PJ4EDK2_FRAME_OK' not in (run / 'serial.log').read_text(errors='replace'):
             if time.monotonic() > deadline:
                 raise TimeoutError('no initial rendered frame')
             time.sleep(.1)
@@ -208,8 +208,8 @@ def main():
         report['qemu_cpu_percent_of_one_host_cpu'] = round(
             100 * report['qemu_cpu_s'] / report['host_measured_s'], 2)
         text = (run / 'serial.log').read_text(errors='replace')
-        report['ready'] = f'PJB_UEFI_READY GOP={args.size}' in text
-        report['boot_request'] = 'PJB_BOOT_REQUEST' in text
+        report['ready'] = f'PJ4EDK2_UEFI_READY GOP={args.size}' in text
+        report['boot_request'] = 'PJ4EDK2_BOOT_REQUEST' in text
         report['boot_scope'] = 'animation and request only; no OS loader installed'
         report['logged_slow_samples'] = samples(text)
         measured = [row for item in report['steps'] for row in item['slow_samples']]

@@ -20,8 +20,8 @@ pub struct BootSettings {
 
 impl BootSettings {
     pub fn validate(&self) -> Result<(), &'static str> {
-        if self.timeout_seconds > 120 {
-            return Err("timeout must be 0..120 seconds");
+        if self.timeout_seconds > 99 {
+            return Err("timeout must be 0..99 seconds");
         }
         if self
             .default_entry_id

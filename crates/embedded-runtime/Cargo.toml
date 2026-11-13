@@ -6,6 +6,7 @@ rust-version = "1.93"
 publish = false
 
 [dependencies]
+pj4edk2-rendering = { path = "../rendering" }
 pocketjs-debug-channel = { path = "../debug-channel" }
 pocket-runtime = { path = "../../vendor/pocketjs/engine/runtime" }
 pocket-runtime-cabi = { path = "../../vendor/pocketjs/engine/runtime-cabi", default-features = false, features = ["external-runtime"] }

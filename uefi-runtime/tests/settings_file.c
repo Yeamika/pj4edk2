@@ -29,7 +29,7 @@ static EFI_STATUS EFIAPI protocol(EFI_HANDLE h, EFI_GUID *g, VOID **out) {
 }
 static EFI_STATUS EFIAPI volume(EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *f, EFI_FILE_PROTOCOL **out) { *out=&root;return EFI_SUCCESS; }
 static EFI_STATUS EFIAPI open_file(EFI_FILE_PROTOCOL *self, EFI_FILE_PROTOCOL **out, CHAR16 *path, UINT64 mode, UINT64 attr) {
-  if (self==&root) { *out=&directory; return EFI_SUCCESS; }
+  if (attr & EFI_FILE_DIRECTORY) { *out=&directory; return EFI_SUCCESS; }
   if (!exists && !(mode&EFI_FILE_MODE_CREATE)) return EFI_NOT_FOUND;
   if (mode&EFI_FILE_MODE_WRITE && !writable) return EFI_WRITE_PROTECTED;
   exists=TRUE;*out=&file;return EFI_SUCCESS;
@@ -50,15 +50,18 @@ static EFI_STATUS EFIAPI write_file(EFI_FILE_PROTOCOL *f, UINTN *n, VOID *in) {
   size=*n;copy(bytes,in,*n);return EFI_SUCCESS;
 }
 static EFI_STATUS EFIAPI flush(EFI_FILE_PROTOCOL *f) { ++flushes;return fail==3?EFI_DEVICE_ERROR:EFI_SUCCESS; }
+static EFI_STATUS EFIAPI set_info(EFI_FILE_PROTOCOL *f, EFI_GUID *g, UINTN n, VOID *in) {
+  size=((EFI_FILE_INFO *)in)->FileSize;return EFI_SUCCESS;
+}
 int main(void) {
   UINT8 input[512], output[512];
   services.LocateHandleBuffer=locate;services.HandleProtocol=protocol;
   part.Type=PARTITION_TYPE_GPT;part.Info.Gpt.PartitionTypeGUID=gEfiPartTypeSystemPartGuid;
   fs.OpenVolume=volume;
   root.Open=directory.Open=open_file;root.Close=directory.Close=file.Close=close_file;
-  root.Flush=directory.Flush=file.Flush=flush;file.GetInfo=info;file.Read=read_file;file.Write=write_file;
+  root.Flush=directory.Flush=file.Flush=flush;file.GetInfo=info;file.SetInfo=set_info;file.Read=read_file;file.Write=write_file;
   for (UINTN i=0;i<512;++i) input[i]=(UINT8)(i*7);
-  CHECK(pjb_settings_read(0,output,512)==EFI_NOT_FOUND && closed==2);
+  CHECK(pjb_settings_read(0,output,512)==EFI_NOT_FOUND && closed==4);
   CHECK(pjb_settings_write(1,input,512)==EFI_SUCCESS && size==512 && writes==1 && flushes==3);
   CHECK(pjb_settings_read(1,output,512)==EFI_SUCCESS);
   for (UINTN i=0;i<512;++i) CHECK(input[i]==output[i]);
@@ -72,5 +75,25 @@ int main(void) {
   writable=FALSE;CHECK(pjb_settings_write(0,input,512)==EFI_WRITE_PROTECTED);writable=TRUE;
   for (fail=1;fail<=4;++fail) { size=512; CHECK(EFI_ERROR(pjb_settings_write(0,input,512))); }
   fail=5;size=512;CHECK(pjb_settings_read(0,output,512)==EFI_DEVICE_ERROR);
+  fail=0;exists=FALSE;size=0;
+  UINTN length=0;
+  CHECK(pjb_config_access(output,512,&length,0)==EFI_NOT_FOUND);
+  CHECK(pjb_config_access(input,99,&length,1)==EFI_SUCCESS && size==99);
+  CHECK(pjb_config_access(output,512,&length,0)==EFI_SUCCESS && length==99);
+  CHECK(pjb_config_access(input,40,&length,1)==EFI_ACCESS_DENIED && size==99);
+  CHECK(pjb_config_access(input,40,&length,2)==EFI_SUCCESS && size==40);
+  CHECK(pjb_config_access(output,512,&length,0)==EFI_SUCCESS && length==40);
+  size=513;CHECK(pjb_config_access(output,512,&length,0)==EFI_BAD_BUFFER_SIZE);
+  exists=FALSE;size=40;
+  CHECK(pjb_ui_package_read(NULL,0,&length)==EFI_NOT_FOUND);
+  exists=TRUE;
+  CHECK(pjb_ui_package_read(NULL,0,&length)==EFI_BUFFER_TOO_SMALL && length==40);
+  CHECK(pjb_ui_package_read(output,39,&length)==EFI_BUFFER_TOO_SMALL);
+  CHECK(pjb_ui_package_read(output,512,&length)==EFI_SUCCESS && length==40);
+  fail=5;CHECK(pjb_ui_package_read(output,512,&length)==EFI_VOLUME_CORRUPTED);fail=0;
+  size=0;CHECK(pjb_ui_package_read(NULL,0,&length)==EFI_BAD_BUFFER_SIZE);
+  size=16*1024*1024+1;CHECK(pjb_ui_package_read(NULL,0,&length)==EFI_BAD_BUFFER_SIZE);
+  size=40;count=2;CHECK(pjb_ui_package_read(NULL,0,&length)==EFI_NO_MAPPING);count=1;
+  CHECK(pjb_ui_package_read(NULL,0,NULL)==EFI_INVALID_PARAMETER);
   return 0;
 }

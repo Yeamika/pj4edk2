@@ -1,0 +1,10 @@
+[package]
+name="pj4edk2-pack-ui"
+version="0.1.0"
+edition="2024"
+[workspace]
+[dependencies]
+pj4edk2-ui-package={path="../../crates/ui-package"}
+pocketjs-boot-ui={path="../../default-ui"}
+pocketjs-boot-assets={path="../../crates/boot-assets"}
+serde_json="1"

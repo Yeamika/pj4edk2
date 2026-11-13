@@ -115,8 +115,8 @@ impl UiConfig {
         if self.display_id.is_empty() || self.display_id.len() > 64 {
             return Err("display identifier must contain 1..64 bytes");
         }
-        if self.timeout_seconds > 120 {
-            return Err("timeout must be 0..120 seconds");
+        if self.timeout_seconds > 99 {
+            return Err("timeout must be 0..99 seconds");
         }
         if self.battery_percent.is_some_and(|p| p > 100) {
             return Err("battery must be 0..100");

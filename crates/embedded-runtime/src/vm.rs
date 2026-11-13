@@ -252,6 +252,19 @@ impl PocketJs {
         self.status(status)
     }
 
+    /// Prepare host assets after guest evaluation, keeping the page and its
+    /// globals. Pending device reads finish before mutable resource access.
+    pub fn prepare_resources<T>(
+        &mut self,
+        generation: UserGeneration,
+        prepare: impl FnOnce(&mut pocketjs_core::Ui) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        self.checked(generation)?;
+        self.complete_presentation()?;
+        let mut core = self.ops.core_mut().map_err(|_| Error::Runtime)?;
+        prepare(&mut core.ui)
+    }
+
     /// Advance a fixed step and present. Immediate outputs complete here;
     /// Deferred accelerators can stay in flight through the next guest turn.
     pub fn tick(
@@ -388,6 +401,7 @@ impl PocketJs {
     }
     fn reset_ui(&mut self) -> Result<(), Error> {
         let mut ui = pocketjs_core::Ui::new();
+        pj4edk2_rendering::configure(&mut ui);
         ui.set_viewport(self.config.width as f32, self.config.height as f32);
         ui.set_tick_rate(self.config.tick_hz);
         *self.ops.core_mut().map_err(|_| Error::Runtime)? = CoreState::new(ui);

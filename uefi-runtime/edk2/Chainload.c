@@ -10,9 +10,12 @@
 #include <Protocol/FirmwareVolume2.h>
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
+#include "Esp.h"
 #define PJB_EDK2
 #include "pocketjs_boot_context.h"
 UINTN pjb_quiesce_hardware(UINT32 Quiesced);
+UINTN pjb_fastboot_before_boot(VOID);
+UINTN pjb_display_stop(VOID);
 
 static EFI_STATUS StartChild(EFI_HANDLE Image, const CHAR16 *Options, const PJB_BOOT_DISPLAY *Display)
 {
@@ -47,6 +50,10 @@ static EFI_STATUS StartChild(EFI_HANDLE Image, const CHAR16 *Options, const PJB_
   }
   // The caller retains Options until the child exits; application Exit() also
   // unloads the child. No child handle or image memory is used after StartImage.
+  Status=pjb_fastboot_before_boot();
+  if (EFI_ERROR(Status)) { gBS->UnloadImage(Image); goto Restore; }
+  Status=pjb_display_stop();
+  if (EFI_ERROR(Status)) { gBS->UnloadImage(Image); goto Restore; }
   Status=pjb_quiesce_hardware(1);
   if (EFI_ERROR(Status)) {
     gBS->UnloadImage(Image);
@@ -90,11 +97,20 @@ UINTN pjb_start_entry(const CHAR16 *Path, const CHAR16 *Options, const PJB_BOOT_
   } else if (Path[0] != L'\\') {
     return EFI_INVALID_PARAMETER;
   }
-  Status = gBS->LocateHandleBuffer(ByProtocol,
-      Firmware ? &gEfiFirmwareVolume2ProtocolGuid : &gEfiSimpleFileSystemProtocolGuid,
-      NULL, &Count, &Handles);
-  if (EFI_ERROR(Status))
-    return Status;
+  if (!Firmware) {
+    EFI_FILE_PROTOCOL *Root;
+    EFI_HANDLE Selected;
+    Status=pjb_open_esp(&Root,&Selected);
+    if (EFI_ERROR(Status)) return Status;
+    Status=Root->Close(Root);
+    if (EFI_ERROR(Status)) return Status;
+    Handles=AllocatePool(sizeof(*Handles));
+    if (Handles==NULL) return EFI_OUT_OF_RESOURCES;
+    Handles[0]=Selected; Count=1;
+  } else {
+    Status=gBS->LocateHandleBuffer(ByProtocol,&gEfiFirmwareVolume2ProtocolGuid,NULL,&Count,&Handles);
+    if (EFI_ERROR(Status)) return Status;
+  }
   for (Index = 0; Index < Count; ++Index) {
     DevicePath = Firmware ? AppendDevicePathNode(DevicePathFromHandle(Handles[Index]),
         (EFI_DEVICE_PATH_PROTOCOL *)&FileNode) : FileDevicePath(Handles[Index], Path);

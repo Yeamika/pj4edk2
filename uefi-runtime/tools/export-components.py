@@ -18,7 +18,7 @@ if len(lists) != 1:
 module = lists[0].parent
 libs = [Path(line) for line in lists[0].read_text().splitlines() if line.strip()]
 quickjs = next(f for f in libs if f.name == 'QuickJsCore.lib')
-runtime_objects = [module / (n + '.obj') for n in ('Entry', 'TimeCompat', 'Chainload', 'Hardware', 'Settings')]
+runtime_objects = [module / (n + '.obj') for n in ('Entry', 'TimeCompat', 'Chainload', 'Hardware', 'Settings', 'Discovery', 'Fastboot', 'Display')]
 a.output.parent.mkdir(parents=True, exist_ok=True)
 if a.support.exists():
     raise SystemExit('Retain existing ABI support output; choose a fresh build')

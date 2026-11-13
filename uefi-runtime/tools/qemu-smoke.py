@@ -82,8 +82,8 @@ if a.command=='start':
                 print('PAUSED_AT_RESET',process.pid,flush=True)
                 break
         log=(run/'serial.log').read_text(errors='replace') if (run/'serial.log').exists() else ''
-        if not a.paused and 'PJB_UEFI_READY' in log:
-            print(log[log.index('PJB_UEFI_READY'):].strip(),flush=True)
+        if not a.paused and 'PJ4EDK2_UEFI_READY' in log:
+            print(log[log.index('PJ4EDK2_UEFI_READY'):].strip(),flush=True)
             print('PID',process.pid,flush=True)
             break
         time.sleep(.25)

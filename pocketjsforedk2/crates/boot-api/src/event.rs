@@ -9,6 +9,8 @@ pub enum UiEvent {
     Waiting {
         active: bool,
     },
+    /// A platform USB transaction pauses startup and shutdown until complete.
+    FastbootState { busy: bool },
     /// Battery telemetry is supplied by the BSP; it is not user interaction.
     PowerState {
         battery_percent: Option<u8>,

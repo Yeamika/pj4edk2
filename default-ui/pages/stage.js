@@ -7,7 +7,7 @@ globalThis.rimuksSuspendStage = () => {
 globalThis.rimuksResumeStage = () => {
     if (!rimuksStageParents.length) throw new Error('no parent stage');
     if (Rimuks.bootImage) ui.freeTexture(Rimuks.bootImage.handle);
-    if (Rimuks.screenRoot) ui.destroyNode(Rimuks.screenRoot);
+    if (Rimuks.screenRoot) Rimuks.destroy(Rimuks.screenRoot);
     const parent = rimuksStageParents.pop();
     globalThis.Rimuks = parent.model; globalThis.rimuksInit = parent.init;
     globalThis.rimuksTick = parent.tick; globalThis.rimuksState = parent.state;

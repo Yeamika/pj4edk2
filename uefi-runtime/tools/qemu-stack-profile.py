@@ -161,7 +161,7 @@ def main():
                 os.sched_setaffinity(0, {control_cpu})
         pid = int((run / 'pid').read_text())
         deadline = time.monotonic() + 30
-        while 'PJB_FRAME_OK' not in (run / 'serial.log').read_text(errors='replace'):
+        while 'PJ4EDK2_FRAME_OK' not in (run / 'serial.log').read_text(errors='replace'):
             if time.monotonic() > deadline:
                 raise TimeoutError('no first UI frame')
             time.sleep(.01)
@@ -204,7 +204,7 @@ for i in range(count):
 inferior = gdb.selected_inferior()
 base = None
 for candidate in [int(gdb.parse_and_eval('$pc')), int(gdb.parse_and_eval('$x30'))]:
-    print('PJB_IMAGE_CANDIDATE=' + hex(candidate))
+    print('PJ4EDK2_IMAGE_CANDIDATE=' + hex(candidate))
     for page in range(candidate & ~4095, max(0x40000000, candidate-size-4096), -4096):
         try:
             if inferior.read_memory(page,2).tobytes() != b'MZ': continue
@@ -213,10 +213,10 @@ for candidate in [int(gdb.parse_and_eval('$pc')), int(gdb.parse_and_eval('$x30')
         except gdb.MemoryError: pass
     if base is not None: break
 if base is None: raise RuntimeError('cannot locate matching EFI image')
-print('PJB_IMAGE_BASE=' + hex(base))
+print('PJ4EDK2_IMAGE_BASE=' + hex(base))
 '''.replace('EFI_PATH', repr(str(args.efi.resolve()))))
         output = gdb.console('source ' + str(locate))
-        match = re.search(r'PJB_IMAGE_BASE=(0x[0-9a-f]+)', output)
+        match = re.search(r'PJ4EDK2_IMAGE_BASE=(0x[0-9a-f]+)', output)
         if not match:
             raise RuntimeError('matching EFI image base was not found: ' + output)
         base = int(match[1], 16)

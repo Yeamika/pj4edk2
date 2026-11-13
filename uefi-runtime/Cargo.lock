@@ -91,6 +91,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "pj4edk2-rendering"
+version = "0.1.0"
+dependencies = [
+ "pocket-drivers",
+ "pocketjs-core",
+]
+
+[[package]]
+name = "pj4edk2-ui-package"
+version = "0.1.0"
+dependencies = [
+ "pocket-package",
+]
+
+[[package]]
 name = "pocket-draw-ops"
 version = "0.1.0"
 dependencies = [
@@ -188,6 +203,7 @@ name = "pocketjs-boot-assets"
 version = "0.1.0"
 dependencies = [
  "fontdue",
+ "pj4edk2-rendering",
  "pocket-raster",
  "pocketjs-boot-ui",
  "pocketjs-core",
@@ -231,6 +247,7 @@ name = "pocketjs-embedded-runtime"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "pj4edk2-rendering",
  "pocket-drivers",
  "pocket-present",
  "pocket-raster",
@@ -246,6 +263,7 @@ name = "pocketjs-uefi-runtime"
 version = "0.1.0"
 dependencies = [
  "libm",
+ "pj4edk2-ui-package",
  "pocketjs-boot-assets",
  "pocketjs-boot-context-abi",
  "pocketjs-boot-ui",

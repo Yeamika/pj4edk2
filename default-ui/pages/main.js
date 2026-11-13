@@ -2,7 +2,7 @@
     const R = Rimuks;
     R.enterScene = () => {
         if (R.bootImage) { ui.freeTexture(R.bootImage.handle); R.bootImage = null; }
-        if (R.sceneRoot) ui.destroyNode(R.sceneRoot);
+        if (R.sceneRoot) R.destroy(R.sceneRoot);
         R.sceneRoot = R.box(0, 0, R.w, R.h, null, R.screenRoot); R.prop(R.sceneRoot, 'z', 5);
         R.root = R.sceneRoot;
         if (R.cfg.mode === 'low-battery') R.makeLowBattery();
@@ -30,6 +30,7 @@
         R.settingsOpen = false; R.pendingTimeout = R.cfg.timeout_seconds; R.animationProgress = 0;
         R.pendingText = String(R.pendingTimeout); R.settingsSaving = false; R.settingsFailed = false;
         R.hostWaiting = false; R.waiting = false;
+        R.fastbootBusy = false;
         R.chargeAvailable = false; R.chargeEnabled = null; R.chargeRequested = null; R.chargePending = null;
         R.chargeFailed = false; R.chargeFocused = false; R.actionFocus = null;
         R.debugEnabled = false; R.debugPending = null; R.debugFailed = false;
@@ -51,9 +52,20 @@
     globalThis.rimuksTick = (now, json) => {
         const next = Math.max(R.now, now); R.dt = Math.min(64, next - R.now); R.now = next;
         const events = JSON.parse(json);
+        // Apply USB ownership before any input in this frame, even when the
+        // host reports it after a touch/click in the event batch.
+        for (const event of events) {
+            if (event.type === 'fastboot_state') {
+                R.fastbootBusy = event.busy;
+                if (event.busy) R.autoActive = false;
+            }
+        }
         for (const event of events) {
             if (R.powerReply(event)) continue;
             if (R.chargeReply(event)) continue;
+            if (event.type === 'recovery_result' && event.operation === 'reload-list') {
+                R.listReloadPending = false; R.listReloadFailed = !event.success; continue;
+            }
             if (R.recoveryReply(event)) continue;
             if (event.type === 'boot_failed') {
                 R.autoActive = false;
@@ -68,6 +80,7 @@
             if (R.debugReply(event)) continue;
             if (R.defaultReply(event)) continue;
             if (event.type === 'waiting') { R.hostWaiting = event.active; continue; }
+            if (event.type === 'fastboot_state') continue;
             if (event.type === 'settings_saved' || event.type === 'settings_save_failed') {
                 if (R.settingsSaving) {
                     if (event.type === 'settings_saved' && event.seconds === R.settingsSubmitted) {
@@ -82,14 +95,16 @@
             if (R.scene === 'low-battery') continue;
             if (event.type === 'pointer') {
                 if (event.down && !R.pointer.down) R.autoActive = false;
-                R.pointer = {x: (event.x - R.viewportOrigin[0]) / R.scale,
+                const point = {x: (event.x - R.viewportOrigin[0]) / R.scale,
                     y: (event.y - R.viewportOrigin[1]) / R.scale, down: event.down};
+                if (R.bootPointer) R.bootPointer(point);
+                R.pointer = point;
                 R.inputKind = 'pointer'; continue;
             }
             R.autoActive = false; R.inputKind = event.type === 'key' ? 'keyboard' : 'pointer';
             const e = event.type === 'click' ? {type: 'click', x: (event.x - R.viewportOrigin[0]) / R.scale,
                 y: (event.y - R.viewportOrigin[1]) / R.scale} : event;
-            if ((e.type === 'click' && R.inside(e, R.menuX, 22, 116, 40)) ||
+            if ((e.type === 'click' && R.inside(e, R.menuX, 22, R.menuWidth, 40)) ||
                 (e.type === 'key' && e.key === 'F2')) { R.openSettings(); continue; }
             if (R.settingsEvent(e)) continue;
             if (R.chargeEvent(e)) continue;

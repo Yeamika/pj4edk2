@@ -57,7 +57,7 @@ int main(int argc, char **argv)
 {
   (void)argc;
   (void)argv;
-  pjb_log((const unsigned char *)"PJB_MAIN", 8);
+  pjb_log((const unsigned char *)"PJ4EDK2_MAIN", sizeof("PJ4EDK2_MAIN")-1);
   return pjb_main(gImageHandle, gST);
 }
 
@@ -68,7 +68,7 @@ EFI_STATUS EFIAPI PjbUefiMain(EFI_HANDLE Image, EFI_SYSTEM_TABLE *Table)
   const UINTN Pages = EFI_SIZE_TO_PAGES(2 * 1024 * 1024);
   EFI_PHYSICAL_ADDRESS Stack = 0;
   PJB_CONTEXT Run;
-  pjb_log((const unsigned char *)"PJB_ENTRY", 9);
+  pjb_log((const unsigned char *)"PJ4EDK2_ENTRY", sizeof("PJ4EDK2_ENTRY")-1);
   (void)Image;
   (void)Table;
   if (EFI_ERROR(gBS->AllocatePages(AllocateAnyPages, EfiBootServicesData, Pages, &Stack)))

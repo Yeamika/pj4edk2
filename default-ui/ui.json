@@ -19,5 +19,6 @@
     "pages/main.js",
     "pages/stage.js"
   ],
-  "font": "assets/Inter-Regular.ttf"
+  "font": "assets/Inter-Regular.ttf",
+  "font_license": "assets/LICENSE-Inter.txt"
 }

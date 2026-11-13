@@ -6,6 +6,7 @@ rust-version = "1.93"
 publish = false
 
 [dependencies]
+pj4edk2-rendering = { path = "../rendering" }
 pocketjs-boot-ui = { path = "../../default-ui" }
 pocketjs-core = { path = "../../vendor/pocketjs/engine/core" }
 pocket-raster = { path = "../../vendor/pocketjs/engine/raster" }

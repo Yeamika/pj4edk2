@@ -159,7 +159,7 @@ mod tests {
             assert_eq!(state.value, before); assert_eq!(state.sequence(), 0);
         }
         let writes = disk.writes;
-        assert!(matches!(state.action(&mut disk, &cfg, &UiAction::SetTimeout { seconds: 121 }), Some(UiEvent::SettingsSaveFailed)));
+        assert!(matches!(state.action(&mut disk, &cfg, &UiAction::SetTimeout { seconds: 100 }), Some(UiEvent::SettingsSaveFailed)));
         assert!(matches!(state.action(&mut disk, &cfg, &UiAction::SetDefaultEntry { id: "missing".into() }), Some(UiEvent::DefaultEntrySaveFailed { .. })));
         assert_eq!(disk.writes, writes);
     }

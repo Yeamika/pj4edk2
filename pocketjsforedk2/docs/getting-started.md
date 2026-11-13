@@ -26,13 +26,13 @@ cargo check --locked --workspace --target aarch64-unknown-uefi
 
 ## C 头文件与互调
 
-头文件只覆盖跨 EFI ABI；Rust 服务 trait 不直接生成 C 接口。生产 `.h` 由固定版本 cbindgen 与 Rust 生成器产生。
+头文件只覆盖跨 EFI ABI；Rust 服务 trait 不直接生成 C 接口。生产 `.h` 由固定版本 cbindgen 与 Rust 生成器产生。以下命令从接口工程根目录执行，先将 `BUILD_DIR` 设置为源码树外的构建目录。
 
 ```sh
 cargo install cbindgen --version 0.29.2 --locked
-mkdir -p /tmp/pocketjs-interface-check
-rustc --edition=2024 tools/verify.rs -o /tmp/pocketjs-interface-check/verify
-TMPDIR=/tmp/pocketjs-interface-check /tmp/pocketjs-interface-check/verify . --native-only
+mkdir -p "$BUILD_DIR/interface-check"
+rustc --edition=2024 tools/verify.rs -o "$BUILD_DIR/interface-check/verify"
+TMPDIR="$BUILD_DIR/interface-check" "$BUILD_DIR/interface-check/verify" . --native-only
 ```
 
 本机检查需要 X64 Rust 工具链和 C 编译器 `cc`，覆盖生成内容、C11 布局以及 32 轮父子句柄转发。 去掉 `--native-only`

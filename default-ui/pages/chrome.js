@@ -15,10 +15,10 @@
         R.stageLabel = R.text(12, 6, 144, R.cfg.mode === 'uefi-loader' ? 'uefi + load' : R.cfg.mode,
             7, C.white, stage); R.prop(R.stageLabel, 'align', 1);
         R.show(stage, R.w >= 1000);
-        R.menuX = R.w - 152;
-        R.menuButton = R.box(R.menuX, 22, 116, 40, C.header, top, 8); R.menuHot = 0;
-        R.text(12, 9, 70, 'Settings', 0, C.white, R.menuButton);
-        for (let i = 0; i < 3; i++) R.box(84, 13 + i * 6, 18, 2, C.white, R.menuButton);
+        R.menuWidth = 132; R.menuX = R.w - R.menuWidth - 36;
+        R.menuButton = R.box(R.menuX, 22, R.menuWidth, 40, C.header, top, 8); R.menuHot = 0;
+        R.text(12, 9, 86, 'Settings', 0, C.white, R.menuButton);
+        for (let i = 0; i < 3; i++) R.box(100, 13 + i * 6, 18, 2, C.white, R.menuButton);
         R.makeBatteryStatus(top);
         R.footer = R.box(0, R.h - R.L.footer, R.w, R.L.footer, C.footer);
         R.prop(R.footer, 'z', 3); R.box(0, 0, R.w, 1, 0xd4e8f4, R.footer);
@@ -42,7 +42,7 @@
     R.updateChrome = () => {
         if (R.scene === 'low-battery') { R.waiting = false; return; }
         R.updateBatteryStatus();
-        const waiting = !!(R.hostWaiting || R.settingsSaving || R.debugPending !== null || R.defaultSaving || R.poweringOff || R.autoActive || (R.booting && !R.emitted));
+        const waiting = !!(R.hostWaiting || R.fastbootBusy || R.settingsSaving || R.debugPending !== null || R.defaultSaving || R.poweringOff || R.autoActive || (R.booting && !R.emitted));
         R.waiting = waiting;
         const ring = [0, 1, 2, 5, 8, 7, 6, 3], phase = (R.now / 1200 * 8) % 8;
         R.loaderCells.forEach((cell, i) => {
@@ -51,7 +51,7 @@
                 (i === 4 ? (Math.floor(R.now / 500) % 2 === 0 ? 1 : 0.16) : 1);
             R.opacity(cell, alpha);
         });
-        const hot = !R.booting && (R.settingsOpen || R.inside(R.pointer, R.menuX, 22, 116, 40));
+        const hot = !R.booting && (R.settingsOpen || R.inside(R.pointer, R.menuX, 22, R.menuWidth, 40));
         R.menuHot = R.follow(R.menuHot, hot ? 1 : 0);
         R.fill(R.menuButton, R.mix(C.header, C.headerHover, R.menuHot));
         R.opacity(R.menuButton, R.booting ? 1 - 0.55 * R.ease((R.now - R.bootAt) / 160) : 1);

@@ -1,9 +1,32 @@
 # PocketJS UEFI runtime
 
+The host prefers a standard 32-bit BGRX GOP mode with unchanged or swapped geometry.
+It renders directly to the framebuffer on landscape outputs; portrait outputs
+retain a logical UI buffer and rotate damage directly into physical scanout.
+If a portrait platform offers a landscape mode, hardware owns that rotation:
+the UI writes landscape scanout directly, without a retained logical or rotation
+buffer. Touch and the restored EFI boot-display record retain portrait-panel
+coordinates. The optional `pj4edk2_display.h` protocol explicitly identifies
+this mapping and the compatibility handoff mode. Hardware implements the clockwise quarter turn
+relative to its inherited panel mounting; geometry alone is not a rotation API.
+A same-rectangle VideoToVideo BLT presents CPU framebuffer writes. Platforms
+without a compatible mode keep the existing BLT/rotation-buffer path.
+The compatibility GOP mode (or entry mode without platform metadata) is restored after releasing all VM framebuffer references,
+before launching an EFI child, reloading the menu or returning to firmware.
+A failed restoration blocks child launch. This keeps existing OS loaders on
+their inherited display ABI without board-specific logic in the runtime.
+
 This directory implements the ARM64 EFI host for the shared interfaces and
 default pages. It uses generic EDK II and standard UEFI protocols. Board
 drivers, boot targets and firmware packaging belong to the consuming platform
 project. No board repository is required to build this runtime.
+
+The optional `pj4edk2_fastboot.h` Boot Services protocol supplies `start`,
+`poll` and `stop` callbacks. The menu polls once per frame. A busy transaction
+pauses automatic startup and blocks boot/shutdown actions; USB is released
+before starting an EFI child, on exit, and on error. The platform owns the
+Fastboot wire protocol, USB driver, storage access and display exclusion.
+Platforms without this protocol continue to run the menu normally.
 
 ## Build independent components
 
@@ -15,11 +38,11 @@ application. Board JSON is compiled separately by the SDK producer.
 
 The repository root `build.sh` fetches generic EDK II and builds private
 BaseTools by default. `--edk2 DIR` accepts a caller-selected EDK II checkout.
-For direct low-level use:
+For direct low-level use, set `PJB_SOURCE_ROOT` to the pj4edk2 repository root and initialize its submodules first:
 
 ```sh
 export PJB_EDK2_ROOT=/path/to/generic/edk2
-export PJB_EDK2_LIBC=/path/to/pinned/edk2-libc
+export PJB_EDK2_LIBC="$PJB_SOURCE_ROOT/vendor/edk2-libc"
 export EDK_TOOLS_PATH=/path/to/built/BaseTools
 export PJB_BUILD_DIR=/path/to/private/work
 export PJB_ARCHIVE=/path/to/output/PocketJS.a
@@ -46,10 +69,10 @@ and page code own no filesystem implementation. `edk2/Settings.c` uses standard
 SimpleFileSystem and PartitionInfo protocols to select exactly one GPT ESP. Zero
 ESPs or multiple ESPs fail without choosing an arbitrary disk.
 
-The host creates `\EFI\pj4edk2\settings0.bin` and `settings1.bin` as needed.
+The host creates `EFI/BOOT/pj4edk/settings0.bin` and `settings1.bin` as needed.
 Each is a fixed 512-byte record with `PJSSET01`, a monotonic 64-bit sequence, a
 bounded JSON payload and CRC32 over the whole record. The payload contains
-`timeout_seconds` (0–120) and `default_entry_id`. Startup uses the newest valid
+`timeout_seconds` (0–99) and `default_entry_id`. Startup uses the newest valid
 record and validates the entry against the current configuration. Missing or
 corrupt records fall back to embedded defaults; a valid older slot survives a
 corrupt latest slot. This format is application state, not UEFI variable
@@ -104,8 +127,8 @@ settings. The page regression checks error display, cancellation of repeated
 automatic launches, settings input and an explicit retry. Device validation is
 pending.
 
-The software renderer retains its logical framebuffer and reports a stable
-buffer identity for partial refresh. Portrait GOP output rotates damaged
+When direct framebuffer output is unavailable, the fallback software renderer retains its logical framebuffer and reports a stable
+buffer identity for partial refresh. Portrait fallback GOP output rotates damaged
 rectangles into a compact buffer capped at 2 MiB. Larger updates are split into
 strips; small damage is still submitted in one BLT. This avoids keeping a second
 full 1920×1200×4 buffer alongside the logical framebuffer, which failed to
@@ -136,7 +159,7 @@ reaches an EFI boot request without installing an OS loader.
 
 `tools/qemu-boot-profile.py` measures startup separately. It starts QEMU paused
 at virtual reset, enables the requested CPU budget, then times `cont` through
-the first `PJB_FRAME_OK` and captures that first screen. For example:
+the first `PJ4EDK2_FRAME_OK` and captures that first screen. For example:
 
 ```sh
 python3 tools/qemu-boot-profile.py --efi /path/to/PocketJsBoot.efi \
@@ -233,3 +256,21 @@ handoff; this runtime contains no Linux DT or board MMIO logic.
 `cargo test --manifest-path Cargo.toml --locked --test boot_display --test rotation --test settings`
 checks geometry and existing consumers. The C hardware bridge test checks child
 launch, table publication/restoration and failure cleanup.
+
+### ESP menu configuration
+
+With platform policy `esp_discovery: true`, the host first reads
+`EFI/BOOT/pj4edk/config.json` (UiConfig JSON). Only when absent does it scan
+canonical architecture loaders in immediate `EFI/<system>/` directories,
+merge board names and launch parameters, and save the menu with readback.
+Subsequent boots use that file without scanning. `BOOT`, `Tools` and
+`pj4edk2` are excluded; the menu supports eight entries.
+The settings page's **Reload boot list** explicitly rescans and replaces
+the menu configuration, then reopens the menu without rebooting.
+Invalid configurations are preserved, and failures disable automatic boot.
+A unique GPT ESP is required. No fallback executable is installed.
+
+All pj4edk2 persistence is in `EFI/BOOT/pj4edk/`: `config.json` stores the menu;
+`settings0.bin` and `settings1.bin` store verified timeout/default overrides.
+Old settings are not migrated automatically. The delay supports 0–99 seconds
+(0 disables automatic boot), with a 3-column, 4-row numeric keypad in settings.

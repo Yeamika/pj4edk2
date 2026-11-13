@@ -2,6 +2,11 @@
 
 本页说明共享中间件如何连接普通 framebuffer、UEFI GOP 和裸机加速器。单片机是可用环境之一，中间件不按板型选择渲染方式。
 
+UEFI 与 WASM 预览共同使用 [`pj4edk2-rendering`](../crates/rendering/README.md) 的像素呈现规则：
+文字和图像纹理采用最近邻采样，绘制与命中检测按像素网格对齐；字体图集来自同一份 `.pocket`。
+圆角覆盖率、透明度和淡入淡出仍由上游 PocketJS 计算。浏览器 DOM 是独立的参考呈现，字体 hinting 不属于 PocketJS 的像素契约。
+启动动画的名称卡片也使用共享 UI 导出的描述，颜色、截短文本和尺寸在预生成与运行时保持一致。
+
 > [!NOTE]
 > 状态：已接入上游 Renderer、DisplayOutput 和
 > Coordinator。宿主测试覆盖真实软件像素及模拟异步加速器的生命周期；尚未实现或验证特定 GPU、blitter 或板级显示控制器驱动。

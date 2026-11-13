@@ -1,6 +1,8 @@
 /* Execute the actual C bridge and child launch boundary with fake EFI services. */
 #include "../edk2/Hardware.c"
 #include "../edk2/Chainload.c"
+#include "../edk2/Fastboot.c"
+#include "../edk2/Display.c"
 #define CHECK(x) do { if (!(x)) return __LINE__; } while(0)
 static EFI_STATUS locate_status,read_status,stop_status,resume_status,child_status;
 static unsigned stopped,resumed,started,unloaded;
@@ -9,12 +11,30 @@ static PJB_CHARGE_CONTROL_PROTOCOL charge;
 static UINT32 charge_value;
 static EFI_STATUS charge_status;
 static EFI_LOADED_IMAGE_PROTOCOL loaded;
+static PJ4EDK2_FASTBOOT_PROTOCOL fastboot;
+static EFI_STATUS fastboot_stop_status;
+static UINT32 fastboot_flags;
+static unsigned fastboot_starts,fastboot_stops;
+static EFI_STATUS display_restore_status;
+static unsigned display_restores;
+static EFI_STATUS EFIAPI RestoreDisplay(EFI_GRAPHICS_OUTPUT_PROTOCOL *This,UINT32 Mode) {
+  ++display_restores;return display_restore_status;
+}
+static EFI_GRAPHICS_OUTPUT_PROTOCOL display_gop={.SetMode=RestoreDisplay};
+static EFI_STATUS EFIAPI FastbootStart(PJ4EDK2_FASTBOOT_PROTOCOL *This) { ++fastboot_starts;return EFI_SUCCESS; }
+static EFI_STATUS EFIAPI FastbootStop(PJ4EDK2_FASTBOOT_PROTOCOL *This) { ++fastboot_stops;return fastboot_stop_status; }
+static EFI_STATUS EFIAPI FastbootPoll(PJ4EDK2_FASTBOOT_PROTOCOL *This,UINT32 *Flags) { *Flags=fastboot_flags;return EFI_SUCCESS; }
 EFI_GUID gEfiLoadedImageProtocolGuid={0};
 EFI_HANDLE gImageHandle;
 VOID *EFIAPI CopyMem(VOID *d,CONST VOID *s,UINTN n) { UINT8 *a=d;const UINT8 *b=s;while(n--)*a++=*b++;return d; }
 VOID *EFIAPI ZeroMem(VOID *d,UINTN n) { UINT8 *a=d;while(n--)*a++=0;return d; }
 UINTN EFIAPI StrSize(CONST CHAR16 *s) { UINTN n=0;while(s[n])++n;return (n+1)*2; }
-static EFI_STATUS EFIAPI Locate(EFI_GUID *g,VOID *r,VOID **out) { *out=(g->Data1==PJB_CHARGE_CONTROL_GUID.data1)?(VOID *)&charge:(VOID *)&protocol;return locate_status; }
+static EFI_STATUS EFIAPI Locate(EFI_GUID *g,VOID *r,VOID **out) {
+  EFI_GUID guid=PJ4EDK2_FASTBOOT_GUID;
+  if(g->Data1==guid.Data1) *out=&fastboot;
+  else *out=(g->Data1==PJB_CHARGE_CONTROL_GUID.data1)?(VOID *)&charge:(VOID *)&protocol;
+  return locate_status;
+}
 static EFI_STATUS EFIAPI Handle(EFI_HANDLE h,EFI_GUID *g,VOID **out) { *out=&loaded;return EFI_SUCCESS; }
 static EFI_STATUS EFIAPI Unload(EFI_HANDLE h) { ++unloaded;return EFI_SUCCESS; }
 static EFI_STATUS EFIAPI Start(EFI_HANDLE h,UINTN *n,CHAR16 **s) { ++started;return child_status; }
@@ -105,5 +125,36 @@ int main(void) {
   stop_status=EFI_SUCCESS;
   CHECK(pjb_shutdown(&system)==EFI_DEVICE_ERROR && reset_calls==1 && resumed==1);
   CHECK(pjb_shutdown(NULL)==EFI_UNSUPPORTED);
+
+  /* A failed display restore must block child execution before hardware
+   * quiesce; retain the mode lease so the caller can retry safely. */
+  unsigned display_children=started,display_quiesced=stopped;
+  DisplayGop=&display_gop;DisplayModeLeased=TRUE;
+  display_restore_status=EFI_TIMEOUT;
+  CHECK(StartChild((EFI_HANDLE)1,options,NULL)==EFI_TIMEOUT &&
+        started==display_children && stopped==display_quiesced && DisplayModeLeased);
+  display_restore_status=EFI_SUCCESS;
+  CHECK(StartChild((EFI_HANDLE)1,options,NULL)==EFI_SUCCESS &&
+        started==display_children+1 && !DisplayModeLeased && display_restores==2);
+
+  /* A live transfer or failed USB release must stop both child launch and
+   * power actions before the board is quiesced or ResetSystem is called. */
+  fastboot=(PJ4EDK2_FASTBOOT_PROTOCOL){1,sizeof(fastboot),FastbootStart,FastbootPoll,FastbootStop};
+  CHECK(pjb_fastboot_start()==EFI_SUCCESS && fastboot_starts==1);
+  fastboot_flags=PJ4EDK2_FASTBOOT_BUSY;
+  UINT32 flags;
+  CHECK(pjb_fastboot_poll(&flags)==EFI_SUCCESS);
+  unsigned children=started,quiesced=stopped,resets=reset_calls;
+  CHECK(StartChild((EFI_HANDLE)1,options,NULL)==EFI_NOT_READY && started==children && stopped==quiesced);
+  CHECK(pjb_shutdown(&system)==EFI_NOT_READY && reset_calls==resets && stopped==quiesced && !fastboot_stops);
+  fastboot_flags=0;CHECK(pjb_fastboot_poll(&flags)==EFI_SUCCESS);
+  fastboot_stop_status=EFI_DEVICE_ERROR;
+  CHECK(StartChild((EFI_HANDLE)1,options,NULL)==EFI_DEVICE_ERROR && started==children && stopped==quiesced);
+  CHECK(pjb_shutdown(&system)==EFI_DEVICE_ERROR && reset_calls==resets && stopped==quiesced && Active);
+  fastboot_stop_status=EFI_SUCCESS;
+  CHECK(StartChild((EFI_HANDLE)1,options,NULL)==EFI_SUCCESS && started==children+1 && !Active);
+  CHECK(pjb_fastboot_start()==EFI_SUCCESS && fastboot_starts==2);
+  CHECK(pjb_shutdown(&system)==EFI_DEVICE_ERROR && reset_calls==resets+1 && Active && fastboot_starts==3);
+  CHECK(pjb_fastboot_stop()==EFI_SUCCESS);
   return 0;
 }

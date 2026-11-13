@@ -5,7 +5,19 @@ pub fn point(logical_height:usize,x:usize,y:usize)->[usize;2] { [logical_height-
 pub fn touch(logical_height:u32,physical:[f32;2])->[f32;2] { [physical[1],logical_height as f32-1.-physical[0]] }
 pub fn region(logical_height:u32,r:Rect)->Rect { Rect { x:logical_height-r.y-r.height,y:r.x,width:r.height,height:r.width } }
 
-/// Trade limited overdraw for fewer synchronous GOP presentation waits.
+/// One presentation rectangle covering every update in a back buffer.
+pub fn bounds(regions:&[Rect])->Option<Rect> {
+    let first=*regions.first()?;
+    let (mut left,mut top)=(first.x,first.y);
+    let (mut right,mut bottom)=(first.x.checked_add(first.width)?,first.y.checked_add(first.height)?);
+    for r in &regions[1..] {
+        left=left.min(r.x);top=top.min(r.y);
+        right=right.max(r.x.checked_add(r.width)?);bottom=bottom.max(r.y.checked_add(r.height)?);
+    }
+    Some(Rect{x:left,y:top,width:right-left,height:bottom-top})
+}
+
+/// Merge only when the extra redraw cost is bounded for the BLT fallback.
 pub fn combine(regions:&[Rect])->Option<Rect> {
     let first=*regions.first()?;
     if regions.len()<2 {return None;}
@@ -24,11 +36,16 @@ pub fn combine(regions:&[Rect])->Option<Rect> {
 
 /// Rotate only a logical damage rectangle into a retained physical framebuffer.
 pub fn copy_region(source:&[u8],logical_width:usize,logical_height:usize,damage:Rect,target:&mut [u8]) {
+    copy_region_strided(source,logical_width,logical_height,damage,target,logical_height*4);
+}
+
+/// Retain firmware scanline padding when writing the physical framebuffer.
+pub fn copy_region_strided(source:&[u8],logical_width:usize,logical_height:usize,damage:Rect,target:&mut [u8],stride:usize) {
     for y in damage.y as usize..(damage.y+damage.height) as usize {
         for x in damage.x as usize..(damage.x+damage.width) as usize {
             let [px,py]=point(logical_height,x,y);
             let from=(y*logical_width+x)*4;
-            let to=(py*logical_height+px)*4;
+            let to=py*stride+px*4;
             target[to..to+4].copy_from_slice(&source[from..from+4]);
         }
     }
@@ -46,6 +63,28 @@ pub fn copy_compact(source:&[u8],logical_width:usize,damage:Rect,target:&mut [u8
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn page_flip_bounds_include_distant_damage_and_reject_overflow() {
+        let a=Rect{x:0,y:0,width:10,height:10};
+        let b=Rect{x:1910,y:1190,width:10,height:10};
+        let all=bounds(&[a,b]).unwrap();
+        assert_eq!((all.x,all.y,all.width,all.height),(0,0,1920,1200));
+        assert!(combine(&[a,b]).is_none());
+        assert!(bounds(&[]).is_none());
+        assert!(bounds(&[Rect{x:u32::MAX,width:2,..a}]).is_none());
+    }
+    #[test]
+    fn framebuffer_rotation_preserves_scanline_padding() {
+        let source:alloc::vec::Vec<u8>=(0..3*2*4).collect();
+        let mut target=[0xa5;3*16];
+        copy_region_strided(&source,3,2,Rect{x:0,y:0,width:3,height:2},&mut target,16);
+        let mut packed=[0;3*2*4];
+        copy_region(&source,3,2,Rect{x:0,y:0,width:3,height:2},&mut packed);
+        for row in 0..3 {
+            assert_eq!(&target[row*16..row*16+8],&packed[row*8..row*8+8]);
+            assert_eq!(&target[row*16+8..row*16+16],&[0xa5;8]);
+        }
+    }
     #[test]
     fn combine_limits_overdraw_and_includes_every_damage_rect() {
         let a=Rect{x:10,y:20,width:30,height:40};

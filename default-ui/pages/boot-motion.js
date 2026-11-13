@@ -2,6 +2,8 @@
 (() => {
     const R = Rimuks, C = R.C;
     R.updateBoot = () => {
+        if (!R.booting && !(R.listDrag && R.listDrag.moved)) R.visualScroll = R.follow(R.visualScroll, R.scrollOffset, 85);
+        R.prop(R.listClip, 'overflow', R.booting ? 0 : 1);
         const elapsed = R.booting ? Math.max(0, R.now - R.bootAt) : 0;
         const raw = R.clamp(elapsed / 1000);
         const detail = 1 - R.ease(elapsed / 160), others = 1 - R.ease(elapsed / 210);
@@ -13,7 +15,7 @@
         R.updateBootCurve();
         R.rows.forEach((row, i) => {
             const chosen = i === R.selected;
-            const visible = i >= R.scrollOffset && i < R.scrollOffset + R.visibleRows;
+            const visible = i + 1 > R.visualScroll && i < R.visualScroll + R.visibleRows;
             const hover = visible && !R.settingsOpen && !R.booting && R.hitBootRow(R.pointer, row, i);
             row.hot = R.follow(row.hot, hover ? 1 : 0);
             row.active = R.follow(row.active, chosen ? 1 : 0, 65);
@@ -63,16 +65,16 @@
                 R.autoActive ? 'Select an entry to pause automatic startup.' : 'Choose an entry, then press it again to start.');
             if (R.defaultSaving) R.label(R.hint, 'Saving default entry and reading configuration...');
             else if (R.defaultSaveFailed) R.label(R.hint, 'Could not save the default. Press its checkbox to retry.');
-            R.label(R.legend, R.rows.length > R.visibleRows ? 'Scroll to see more startup options.' : '');
+            R.label(R.legend, '');
         }
         R.label(R.rangeLabel, R.rows.length > R.visibleRows ?
-            (R.scrollOffset + 1) + '-' + Math.min(R.rows.length, R.scrollOffset + R.visibleRows) + ' of ' + R.rows.length : '');
+            (Math.floor(R.scrollOffset) + 1) + '-' + Math.min(R.rows.length, Math.ceil(R.scrollOffset) + R.visibleRows) + ' of ' + R.rows.length : '');
         const reveal = R.smooth((elapsed - 230) / 720);
         // Track the rotating card's actual right edge, leaving a 16 px gutter.
         const left = Math.min(R.w, Math.max(R.lerp(R.w, R.panelX, reveal),
             selectedGeometry ? selectedGeometry.right + 16 : R.w));
         R.prop(R.panel, 'left', left); R.prop(R.panel, 'w', R.w - left);
-        if (R.booting && raw === 1 && !R.emitted) {
+        if (R.booting && raw === 1 && !R.emitted && !R.fastbootBusy) {
             R.emitted = true;
             const entry = R.cfg.entries[R.selected];
             const x = Math.round(left * R.scale), y = Math.round(R.L.top * R.scale);

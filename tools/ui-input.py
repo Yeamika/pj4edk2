@@ -36,6 +36,8 @@ def ui_identity(repo, default_ui=None):
         raise ValueError('duplicate UI script')
     font = config.get('font')
     record(font)
+    if 'font_license' in config:
+        record(config['font_license'])
     return {'schema': 1, 'scripts': scripts, 'font': font, 'files': files}
 
 

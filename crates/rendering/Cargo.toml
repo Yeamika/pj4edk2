@@ -1,0 +1,12 @@
+[package]
+name = "pj4edk2-rendering"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+pocket-drivers = { path = "../../vendor/pocketjs/engine/drivers" }
+pocketjs-core = { path = "../../vendor/pocketjs/engine/core" }
+
+[dev-dependencies]
+pocket-raster = { path = "../../vendor/pocketjs/engine/raster" }

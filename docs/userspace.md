@@ -3,7 +3,7 @@
 本页描述页面包的存储、加载和调试接入，供宿主与应用开发者参考。
 
 > [!NOTE]
-> 状态：UEFI 分区读取和页面更新仍为设计；默认关闭的数据通道与 BSP 通知已实现。实体调试传输和协议解析尚未接入。
+> 状态：UEFI 已实现从选定 ESP 读取共享 UI 包，详见 [UI 包说明](ui-package.md)。独立内容分区、运行期间热更新及跨 EFI 驻留实例仍为设计；数据队列与 BSP 通知已有实现，实体调试传输尚未接入。
 
 ## 页面与引擎分离
 
@@ -46,8 +46,7 @@ FAT32 适合第一版。仍需确认目标固件实际为这个卷暴露文件�
 
 首次使用时，Rust 服务读取 `.pocket` 到服务拥有的稳定内存，通过上游 `LoadedPackage` 校验 target、host
 ABI、独立的预期 profile hash、布局和内容校验，再创建一次 JS 页面并加载资源。上游已有 `PackageSource` 和
-`OwnedMemorySource`，可以复用解析及所有权逻辑；UEFI 文件来源和新的启动环境 profile 仍需要适配，现有其他设备的包不能直接当作
-UEFI 包使用。
+`OwnedMemorySource`，可以复用解析及所有权逻辑；UEFI 已接入独立的 `pj4edk2-ui` profile 和 ESP 文件来源，现有其他设备的包不能直接当作 UEFI UI 包使用。
 
 接续的 loader 发现配置表后 ACQUIRE 同一个实例，不再调用 `guest.initialize`、重复 evaluate
 页面或从分区重新载入当前包。已加载包的字节、字体和图片必须与原实例一起保留；不能让它们依赖已经关闭的文件对象或前一 loader 的临时缓冲区。
@@ -59,7 +58,7 @@ RAM 中保留，不能通过把堆写入内容分区就跨重启恢复内部指�
 
 依据当前固定提交 `e6770376626a4de5c93eaa6fb048e7e9ffb81f9f` 的
 [DEVTOOLS.md](https://github.com/pocket-nexus/pocketjs/blob/e6770376626a4de5c93eaa6fb048e7e9ffb81f9f/docs/DEVTOOLS.md)
-及本地 core / UI ops，已有：
+及上游 core / UI ops，已有：
 
 - 组件树与节点高亮；
 - 日志、异常和帧信息；

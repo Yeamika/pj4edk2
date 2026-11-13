@@ -13,11 +13,17 @@ pub struct NameCardImage {
 
 pub fn bake(card: &NameCardSpec, compact_fonts: bool) -> Result<NameCardImage, BakeError> {
     card.validate().map_err(BakeError::InvalidSpec)?;
+    bake_with_atlas(card, crate::atlases(compact_fonts)[card.font_slot as usize])
+}
+
+pub fn bake_with_atlas(card: &NameCardSpec, atlas: &[u8]) -> Result<NameCardImage, BakeError> {
+    card.validate().map_err(BakeError::InvalidSpec)?;
     let [width, height] = card.size;
     let (texture_w, texture_h) = (width.next_power_of_two(), height.next_power_of_two());
     let mut ui = Ui::new();
+    pj4edk2_rendering::configure(&mut ui);
     ui.set_viewport(texture_w as f32, texture_h as f32);
-    if !ui.load_font_atlas(crate::atlases(compact_fonts)[card.font_slot as usize]) {
+    if !ui.load_font_atlas(atlas) {
         return Err(BakeError::InvalidFont);
     }
     let node = ui.create_node(spec::NodeType::View as u8);
@@ -52,7 +58,7 @@ pub fn bake(card: &NameCardSpec, compact_fonts: bool) -> Result<NameCardImage, B
     ui.tick();
     ui.draw();
     let mut pixels = vec![0; (texture_w * texture_h * 4) as usize];
-    pocket_raster::render_scaled_premultiplied(&ui, &ui.current_draw_list().words, &mut pixels, 1);
+    pocket_raster::render_scaled_premultiplied(&pj4edk2_rendering::PixelResources(&ui), &ui.current_draw_list().words, &mut pixels, 1);
     // Texture uploads use straight alpha; preserve the baked edge coverage.
     let fill = card.fill.to_le_bytes();
     for pixel in pixels.chunks_exact_mut(4) {

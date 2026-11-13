@@ -10,13 +10,15 @@
     },
     "edk2-libc": {
       "repository": "https://github.com/tianocore/edk2-libc.git",
-      "commit": "73056078b60c9378af08dd122a29913e25e84e1c"
+      "commit": "73056078b60c9378af08dd122a29913e25e84e1c",
+      "path": "vendor/edk2-libc",
+      "verification": "Git submodule; the checked-out commit is recorded in each build"
     },
     "pocketjs": {
       "repository": "https://github.com/pocket-nexus/pocketjs",
       "commit": "e6770376626a4de5c93eaa6fb048e7e9ffb81f9f",
       "path": "vendor/pocketjs",
-      "verification": "197 upstream files verified; workspace manifest is trimmed for used crates"
+      "verification": "Git submodule; the checked-out commit is recorded in each build"
     },
     "quickjs": {
       "repository": "https://github.com/quickjs-ng/quickjs.git",

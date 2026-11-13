@@ -128,9 +128,9 @@ def main():
         profile.qmp(run, 'cont')
         report['resume_command_return_s'] = time.monotonic() - started
         markers = {
-            'app_entry': b'PJB_ENTRY',
-            'protocols_ready': b'PJB_UEFI_READY',
-            'first_submission': b'PJB_FRAME_OK elapsed_ms=0 frames=1 ',
+            'app_entry': b'PJ4EDK2_ENTRY',
+            'protocols_ready': b'PJ4EDK2_UEFI_READY',
+            'first_submission': b'PJ4EDK2_FRAME_OK elapsed_ms=0 frames=1 ',
         }
         previous_poll_start = started
         maximum_poll_gap = 0
@@ -169,7 +169,7 @@ def main():
             100 * (first['qemu_cpu_s'] - entry['qemu_cpu_s'])
             / (first['detected_s'] - entry['detected_s']), 2)
         report['first_tick_ms'] = int(re.search(r'tick_ms=(\d+)', serial)[1])
-        report['ready'] = f'PJB_UEFI_READY GOP={args.size}' in serial
+        report['ready'] = f'PJ4EDK2_UEFI_READY GOP={args.size}' in serial
         ppm = run / 'first-frame.ppm'
         png = run / 'first-frame.png'
         profile.qmp(run, 'screendump', {'filename': str(ppm)})
