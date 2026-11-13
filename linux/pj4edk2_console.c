@@ -3,7 +3,7 @@
  * Register during console_init, collect text immediately, and render from the
  * core-init worker onward. Not a late initramfs module and not a tty/fbdev.
  * Platforms needing cache operations or MMIO use the terminal with their own
- * mapping/present/ownership adapter (e.g. the W202DS inherited DPU path). */
+ * mapping/present/ownership adapter. */
 #include <linux/console.h>
 #include <linux/font.h>
 #include <linux/init.h>

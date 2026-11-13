@@ -41,7 +41,7 @@ static void check(unsigned int format,unsigned int rotation,unsigned int cw,unsi
     assert(!damage.cells && !memcmp(before,ram+64,bytes));
     free(before);free(ram);
 }
-static void optimized_w202(void)
+static void optimized_rgb565(void)
 {
     unsigned int v[20]={1,2,0,0xb0000000,0x9e4000,4608000,1200,1920,2400,
         1,1920,1200,120,84,1640,960,90,180,2,1};
@@ -66,6 +66,6 @@ static void optimized_w202(void)
 int main(void)
 {
     unsigned int f,r;for(f=1;f<=3;f++)for(r=0;r<360;r+=90){check(f,r,12,24);check(f,r,8,16);}
-    optimized_w202();
+    optimized_rgb565();
     puts("PASS: terminal formats, rotation, guards, padding, scrolling, damage");
 }
