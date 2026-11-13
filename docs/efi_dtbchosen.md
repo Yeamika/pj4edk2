@@ -6,7 +6,7 @@
 | 参数 | DT `/chosen` 属性 | 接收方 |
 | --- | --- | --- |
 | initrd 内存范围 | `linux,initrd-start` / `linux,initrd-end` | Linux 内核 |
-| rootfs 分区 | 兼容现有消费者的 `w202,root-partuuid` | 平台 initramfs |
+| rootfs 分区 | `pj4edk2,root-partuuid` | 平台 initramfs |
 | 显示描述 | `pocketjs,boot-display` | 早期 console / 对应显示驱动 |
 
 ## initrd
@@ -17,7 +17,7 @@ EFI 写入实际范围，Linux 定位 initrd；EFI 不执行发行版 rootfs 程
 
 ## rootfs PARTUUID
 
-PARTUUID 标识 GPT 分区，不是文件系统 UUID。`w202,root-partuuid` 是保留的兼容命名，不能当作通用标准属性。
+PARTUUID 标识 GPT 分区，不是文件系统 UUID。`pj4edk2,root-partuuid` 是本项目定义的属性，不是 Devicetree 通用标准属性。
 公共层提供标识校验；加载器选择与写入、initramfs 等待块设备、身份检查及挂载仍属于消费项目。
 根目录子路径等扩展必须由双方显式约定，不能因为文档出现字段就假定已实现。
 
@@ -45,7 +45,7 @@ EFI 与内核两侧的协议头需要保持一致，不能只更新一侧。
 描述校验不等于映射授权。通用 RAM 适配还需要
 `/chosen/pocketjs,boot-display-memory` 指向覆盖 framebuffer 的 reserved-memory，
 由内核确认 memblock 完整保留，并声明 `pocketjs,coherent-scanout`。
-W202DS 等具有特定显存、DPU 或缓存策略的平台使用自己的适配。
+具有特定显存、显示控制器或缓存策略的平台使用自己的适配。
 
 缺失或无效描述按消费端既定策略回退，不能继续使用上次启动的陈旧记录。
 早期显示与原生 DRM 不能同时写同一画面；接管前应停止并等待旧绘制，再转移资源所有权。

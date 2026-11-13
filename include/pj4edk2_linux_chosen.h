@@ -11,7 +11,7 @@ static inline int pj4edk2_linux_initrd_range(unsigned long long start,
     return 1;
 }
 /* Canonical GPT UUID, without terminator. No whitespace or embedded NUL. */
-#define PJ4EDK2_ROOT_PROPERTY "w202,root-partuuid"
+#define PJ4EDK2_ROOT_PROPERTY "pj4edk2,root-partuuid"
 static inline int pj4edk2_linux_partuuid_valid(const char *text, unsigned long bytes)
 {
     unsigned long i;

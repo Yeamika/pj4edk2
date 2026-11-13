@@ -16,13 +16,11 @@
 
 纯协议和转换逻辑不依赖 UEFI、Linux、MMIO 或固定板级地址。
 通用 EFI 桥接只支持满足其 reserved/coherent RAM 条件的 32 位 RGBX/BGRX GOP；
-BLT-only 显示、任意 MMIO 与 W202DS RGB565/DPU 仍由各平台处理。
+BLT-only 显示、任意 MMIO 与其他硬件格式由平台适配处理。
 
 PARTUUID 校验函数不等于完整根分区启动链。实际属性写入、initramfs 接收、内核与模块身份检查由消费项目组合，
 不能因存在公共 helper 就声称所有系统已经接入。
 
-W202DS 可复用公共转换与 DT 辅助，保留自己的镜像、地址、DPU、缓存/MMU、PMIC 看门狗与 CPU 交接策略。
-`LinuxHandoff.c` 等硬件事务不应作为所有平台默认行为。
 
 ## 验证
 

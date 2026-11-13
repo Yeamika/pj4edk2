@@ -15,9 +15,8 @@ RGBX/BGRX 32 位 GOP 和完整 EFI reserved RAM，不处理 BLT-only GOP、任�
 运行中的 Linux 显示驱动不能同时覆盖同一保留画面；示例关闭 efifb 并使用 quiet
 抑制 EFI stub 对固件文本控制台的输出，Linux 自身的 printk 仍正常工作。
 
-W202DS 的加载器复用公共 surface/区域转换和 DT 写入；保留自己的 RGB565 GOP、
-DPU、显存保留策略、镜像加载和直接进入内核逻辑。36 字节 BootDisplay 表只是区域请求，
-不等于 DT 显示描述，也不单独授权物理内存访问。旧 `w202,root-partuuid` 名称为兼容现有消费者保留。
+36 字节 BootDisplay 表只是区域请求，
+不等于 DT 显示描述，也不单独授权物理内存访问。rootfs 分区标识使用 `pj4edk2,root-partuuid` 属性。
 
 协议版本 1 为 RGB565；版本 2 支持 BGRX8888/RGBX8888。公共协议头与
 `kernel-boot-display` 分支保持一致。QEMU ARM64 Small 工程提供桥接应用的实际编译和运行示例。
