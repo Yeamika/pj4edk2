@@ -1,8 +1,0 @@
-/target/
-/upstream/
-/qemu-tools/
-__pycache__/
-/build/
-/evidence/
-/dist/
-*.log

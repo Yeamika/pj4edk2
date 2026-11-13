@@ -1,128 +1,123 @@
-# PocketJS for EDK II
+# pj4edk2 QEMU ARM64 Small
 
-独立维护 UEFI 引导菜单的公共接口、PocketJS 运行时和默认页面，输出 `PocketJS.a` 及配套的 UEFI ABI 支持库。 依赖通用
-EDK II 和 UEFI 协议，可由不同平台接入。板级驱动、菜单配置和最终固件组合由消费项目提供； 当前验证的架构为 AArch64。
+ARM64 `virt` 测试工程：精简 Linux、virtio-gpu DRM、带自定义 DRM 模块的 initramfs，
+以及 pj4edk2 UEFI 菜单。用于验证公共交接协议和完整启动流程，不模拟 W202DS 私有硬件。
 
-## 源码组成
-
-| 目录                       | 内容                                                                  |
-| -------------------------- | --------------------------------------------------------------------- |
-| `pocketjsforedk2/`         | `no_std` 公共 ABI、生成的 C 头文件、Boot API 和接口测试               |
-| `default-ui/`              | 默认菜单、设置、恢复和充电页面，以及字体资源                          |
-| `uefi-runtime/`            | Rust 运行时和 UEFI C 胶合：绘制、输入、硬件协议、设置存储及子应用启动 |
-| `crates/embedded-runtime/` | 通用嵌入式执行层：JS 实例、页面上下文、输入和渲染适配                 |
-| `crates/debug-channel/`    | 有界调试消息队列                                                      |
-| `crates/boot-assets/`      | 字体图集等共享资源的构建                                              |
-| `vendor/pocketjs/`         | 供直接 Cargo 接入及历史核对的固定快照；构建脚本使用下载的上游源码     |
-| `docs/`                    | 模块、接入说明及跨 EFI 实例交接等设计文档                             |
-| `edk2-libc/`               | 保留的固定版本子模块；构建脚本从选定上游下载 C 库                     |
-
-版本固定在 [sources.lock.json](sources.lock.json)、各 `Cargo.lock` 和
-`rust-toolchain.toml`。上游引擎文件校验表位于 `vendor/UPSTREAM.json`。接口只在 `pocketjsforedk2`
-定义，消费端不另存一份公共 ABI。
-
-UEFI 宿主包名为 `pocketjs-uefi-runtime`，通用执行层包名为 `pocketjs-embedded-runtime`。
-运行时代码按职责直接放在上述目录中；跨 EFI 共享实例仍是设计，见[模块与状态说明](docs/modules.md)。
-
-## 构建
-
-需要 Git、Rust 1.93.0（含 `rust-src` 和 `aarch64-unknown-none`）、Cargo、Python 3.11+、GNU
-make、主机 GCC/G++、UUID 开发头文件和 AArch64 GNU GCC/binutils。Rust 构建保留 `x18`，使用
-`panic=abort`，不启用 LTO。
-
-```sh
-./build.sh --output /path/to/build/pocketjs \
-  --source-cache /path/to/cache/upstream
+```text
+simulator/             QEMU 启动、截图、键盘、GPT/FAT32 磁盘生成
+kernel/
+  source/              上游 Linux 源码子模块，固定 v6.12.116
+  kernel.config        allnoconfig 基础上的精简配置
+  build.py             内核、模块、initramfs 构建
+initramfs/
+  init.c               静态 PID1，无发行版依赖
+  drm/                 虚拟 DRM/KMS 验证模块源码
+  common/              kernel-boot-display 分支子模块（内建早期 console/终端）
+uefi/
+  pj4edk2/             pj4edk2 uefi 分支子模块
+  QemuDisplay.c        指定 GOP/ramfb 分辨率的 QEMU 适配
+  build.py             通用 EDK II EFI 应用工程
+  config.json          默认 ARM64 菜单
+efi/
+  common/              linux-efi 分支子模块
+  DisplayBridge.inf    独立 EFI 加载器工程
+  build.py             仅编译 DisplayBridge.efi
+  fixture.c            公共协议 FDT 示例生产端
+  baremetal/           退出 Boot Services 后直接绘制八色条纹
 ```
 
-脚本独立下载通用 EDK II 及其固定的 BaseTools、MdeModulePkg Brotli 子模块，并在输出目录编译 BaseTools。
-无需任何板级仓库。构建输出必须位于源码树外；Cargo 缓存使用正常的 `CARGO_HOME`，目标文件默认放在输出目录。
+## 依赖与构建
 
-构建脚本自动获取 EDK II、`edk2-libc`、PocketJS、QuickJS-NG 的上游 Git 源码，默认使用
-`sources.lock.json` 中的固定提交。可以单独选择仓库、提交、标签、分支或最新提交：
-
-```sh
-./build.sh --output /path/to/build/pocketjs \
-  --source-cache /path/to/cache/upstream \
-  --source-ref pocketjs=latest \
-  --source-repo quickjs=https://github.com/quickjs-ng/quickjs.git \
-  --source-ref quickjs=fd0a0210b7be00957751871e7e01b8291268fc29
-```
-
-`latest` 指所选仓库默认分支的 HEAD；分支和标签每次重新解析。构建把实际提交写入 `upstream.lock.json`，下次用
-`--source-lock /path/to/build/upstream.lock.json` 重放。`--source-ref edk2=REV` 和
-`--source-repo edk2=URL` 可选择通用 EDK II 的其他版本或 fork。 Rust
-阶段只解析另外三个上游；平台组合工程指定自己使用的 EDK II。 具体用法、缓存和编译机分工见
-[上游源码选择](docs/upstream-sources.md)。
-
-其他项目可以传入自己的默认 UI 目录和输出目录：
+Linux 主机，需要 Python 3.12+、GNU make/GCC、AArch64 GNU GCC/binutils、Flex、Bison、
+BC、mtools、dosfstools、QEMU ARM64 和 AAVMF 固件。UEFI 部分还需要 Rust 1.93.0、
+`rust-src`、`aarch64-unknown-none`、UUID 开发头和 Git；具体依赖见各目录说明。
+网络与下载代理通过调用方环境配置，工程不写入机器专属设置。
 
 ```sh
-/path/to/pj4edk2/build.sh \
-  --default-ui /path/to/my-project/ui \
-  --output /path/to/my-project/build/pocketjs \
-  --edk2 /path/to/generic-edk2
+git submodule update --init --recursive
+python3 build.py --output /path/to/build --jobs 8
+# 只构建内核、initramfs 和 DRM 模块：
+python3 build.py --output /path/to/build --jobs 8 --kernel-only
 ```
 
-UI 目录包含 `ui.json`、按清单排列的 JavaScript 文件和字体，无需 `Cargo.toml` 或 Rust 源码。 可从仓库的
-`default-ui/ui.json`、`pages/`、`assets/` 开始修改，目录格式和宿主入口见
-[UI 集成说明](default-ui/README.md)。省略 `--default-ui` 时使用仓库自带 UI；也可以通过
-`PJB_DEFAULT_UI` 环境变量指定，命令行参数优先。此变量也适用于直接调用 Cargo。
+源码和编译结果分离。内核版本、下载哈希及产物尺寸记录在 `linux/build.json`；
+内核源码子模块未初始化时也可按固定哈希下载归档。公共项目可由 `kernel/build.py`
+的 `--boot-display`、`--linux-efi` 指定，支持其他 checkout。
 
-`--edk2 DIR` 使用调用方提供的 EDK II Git checkout，不检查它是否等于本项目的默认提交， 也不下载或修改它；使用时不能同时指定
-`--source-ref edk2=...` 或 `--source-repo edk2=...`。 外部 EDK II 的两个 Brotli
-子模块需由调用方初始化。`EDK_TOOLS_PATH` 可复用已编译的工具； 也可单独运行
-`python3 tools/build-basetools.py --edk2 DIR --output /path/to/build/basetools`。
-运行时 ABI 支持库与平台 EDK II 的版本匹配由最终组合工程检查。
+## 快速运行与截图
 
-JS 源码和字体图集仍然在构建时嵌入 `PocketJS.a`。UI 路径、清单、JS 或字体变化都会触发 Cargo 更新相应内容。输出与
-`CARGO_TARGET_DIR` 必须位于源码和 UI 目录外；默认所有目标文件 都进入 `--output`，也可设置外部
-`CARGO_TARGET_DIR` 来共享编译缓存。
-
-| 输出                            | 用途                                                            |
-| ------------------------------- | --------------------------------------------------------------- |
-| `PocketJS.a`                    | Rust 引擎/页面、QuickJS 和 UEFI C 胶合的完整静态归档            |
-| `abi-support/`                  | 与这次构建匹配的 EDK II / libc 库、入口对象、链接脚本和哈希清单 |
-| `packages/source-manifest.json` | 编译所用 QuickJS、引擎及 EDK II 版本信息                        |
-| `runtime-build.json`            | 源码、所选 UI 输入及最终归档的对应哈希                          |
-| `upstream.lock.json`            | 四个上游仓库及这次实际使用的完整提交                            |
-| `Cargo.lock`                    | 所选源码实际使用的 Rust 依赖锁                                  |
-
-`PocketJS.a` 交给平台组合工程链接进 FD；它本身不是可刷写镜像。板级菜单 JSON 不固化在这个独立归档中，而由最终链接阶段提供。 W202DS
-的消费端是 `w202ds-boot`；`edk2-ums9620` 仅负责该平台驱动，不是本仓库的依赖。
-
-## 使用 Rust 编译机
-
-可以只在编译机完成 Rust 阶段，再在拥有 AArch64 C 工具链和 EDK II 的主机完成公共 UEFI 组件编译：
+直接内核模式验证 DRM/模块，跳过 UEFI 菜单：
 
 ```sh
-# 编译机：使用同一份 pj4edk2 源码和 UI 文件
-./build-rust.sh --default-ui /path/to/my-project/ui --output /path/to/build/rust
-
-# 传回 Rust.a、quickjs/、Cargo.lock、upstream.lock.json、rust-build.json
-# 本地主机：不需要本地安装 Rust
-./build.sh \
-  --default-ui /path/to/my-project/ui \
-  --source-lock /path/to/received/rust/upstream.lock.json \
-  --rust-build /path/to/received/rust --output /path/to/build/pocketjs
+python3 simulator/run.py start --direct --build /path/to/build/linux --run /path/to/run-direct
+python3 simulator/check.py --run /path/to/run-direct
+python3 simulator/run.py screen --run /path/to/run-direct --output /path/to/screen.png
+python3 simulator/run.py stop --run /path/to/run-direct
 ```
 
-接收端可另加 `--edk2 /path/to/generic-edk2`，或使用默认的独立 EDK II 下载。 Rust 编译机阶段不需要 EDK
-II、BaseTools 或板级源码。 接收端会校验 Rust 版本、构建源码、所选 UI 和所有传回文件的哈希。两端 UI 的绝对路径可以不同，
-清单和输入文件内容必须一致；缺文件或 UI 不匹配会拒绝构建。schema 3 同时校验选定上游和 QuickJS 源码；旧版归档需要重新构建。
-`build-rust.sh OUTPUT_DIRECTORY` 的旧调用方式仍可用。默认页面和字体的许可证随对应源码保留。
-
-## 测试
+默认完整路径：UEFI 菜单 → 显示交接桥 → Linux 内建早期 console → initramfs/DRM：
 
 ```sh
-export CARGO_TARGET_DIR=/path/to/build/native-target
-export PJB_EDK2_ROOT=/path/to/generic-edk2
-bash test.sh
+python3 simulator/disk.py --build /path/to/build/linux \
+  --menu-efi /path/to/build/uefi/PocketJsBoot.efi \
+  --bridge-efi /path/to/build/efi/DisplayBridge.efi \
+  --baremetal-efi /path/to/build/efi/Baremetal.efi --output /path/to/disk.img
+python3 simulator/run.py start --disk /path/to/disk.img --run /path/to/run-efi \
+  --firmware-code /path/to/AAVMF_CODE.fd --firmware-vars /path/to/AAVMF_VARS.fd
+python3 simulator/run.py screen --run /path/to/run-efi --output /path/to/menu.png
+python3 simulator/run.py key --run /path/to/run-efi --key ret
+python3 simulator/run.py key --run /path/to/run-efi --key ret
+python3 simulator/check.py --run /path/to/run-efi --require-handoff
 ```
 
-`test.sh` 自动向本机测试提供固定 QuickJS 头文件，并编译官方 guest。只在 Rust 编译机运行时可以传入
-`--rust-only`，UEFI C 测试在本地另行执行。 设置 `PJB_RUN_CARGO_TESTS=1` 可额外验证外部 UI 的真实嵌入，以及共享
-Cargo 缓存下脚本、字体和目录切换后的重编译。
+磁盘是含 GPT 和 FAT32 ESP 的普通文件，默认 128 MiB。配置与设置位于
+`EFI/BOOT/pj4edk/`；默认写入持久化，临时实验可用 `run.py --snapshot`。
+QEMU 关闭后再修改磁盘。演示磁盘的 `EFI/BOOT/BOOTAA64.EFI` 用于启动菜单，
+不改变板级固件的回退策略。截图无需 Pillow，使用 Python 标准库。
 
-本仓库不依赖旧研究目录或 Windows 演示工程。底层模块文档保留接口设计与调试说明，当前构建入口以本页为准。实际验证范围见
-[VALIDATION.md](VALIDATION.md)。
+默认分辨率为 **1920×1200**，完整 EFI 模式默认使用 ramfb，直接启动内核模式
+默认使用 virtio-gpu。`run.py --size WIDTHxHEIGHT` 可覆盖尺寸。EFI 应用内的
+QEMU 适配先选择标准 GOP 模式；AAVMF 缺少所需 ramfb 模式时，使用 fw_cfg
+建立新的 reserved-RAM GOP surface。这里的虚拟硬件操作不进入共享协议或 W202DS。
+
+Linux 的 console 在 `console_initcall` 内建注册，随即接收 printk，
+从 `core_initcall` 开始由 worker 绘制，采用 8×16 字形。它不等待 initramfs 或
+DRM 模块加载。`--require-handoff` 同时检查 console 注册发生在 `/init` 运行前。
+W202DS 也使用早期注册和延后绘制，但保留自己的 DPU/缓存/时钟适配。
+
+## 交接协议示例
+
+```sh
+python3 simulator/run.py dump-dtb --run /path/to/dtb-export
+/path/to/build/linux/make-fixture /path/to/dtb-export/virt.dtb /path/to/fixture.dtb
+python3 simulator/run.py start --direct --build /path/to/build/linux \
+  --dtb /path/to/fixture.dtb --run /path/to/run-protocol
+```
+
+也可在生成 UEFI 演示磁盘时传 `disk.py --dtb /path/to/fixture.dtb`。
+DTB 必须来自同一 QEMU 机器参数。示例写入有效 RGB565 描述，保留一段测试 RAM；
+fixture 消费端只校验，不映射或冒充 virtio-gpu 的真实 framebuffer。
+`pj4edk2_drm.ko` 创建独立的虚拟 DRM/KMS 设备；直接模式的画面来自 virtio-gpu。
+完整 ramfb 模式则使用 EFI 实际保留的 GOP framebuffer，由内建 console 写入原 UI 的
+boot-output 区域，保留顶部和侧边。桥接命令行关闭 efifb，避免第二个驱动覆盖画面。
+
+成功标记包括 `PJ4EDK2_DRM PASS driver=virtio_gpu`、
+`PJ4EDK2_MODULE PASS virtual DRM/KMS registered`、`PJ4EDK2_FB PASS`、
+`PJ4EDK2_SMALL_READY`。提供 fixture 时还应出现 `PJ4EDK2_DT PASS`。
+这些验证不代表 W202DS 的 DPU、旋转或真实显存交接已通过。
+
+## 子模块与版本一致性
+
+通过子模块 gitlink 固定 UEFI、Linux EFI、内核显示公共层和上游 Linux 的版本。
+初始化后应检查各依赖是否包含当前构建入口所需的协议和源文件；`.gitmodules` 的分支名不保证版本匹配。
+消费方应在依赖提交发布后记录对应 gitlink，不将开发用符号链接作为子模块提交。
+
+此分支是独立 QEMU 测试工程。源码存在不代表最新依赖组合已经跑过完整启动链，
+截图、成功标记、软件帧率与物理设备显示验收分别处理。
+
+默认六个启动项为 LinuxA、LinuxB、Android、Windows、Darwin、Baremetal。
+LinuxA/B 使用同一个小内核，日志级别分别为 7 和 6。Baremetal 退出 Boot Services
+后直接绘制八色竖条并停留；`simulator/check-bars.py` 可检查实际截图。
+Android、Windows、Darwin 只有示例 EFI 路径，未附带对应系统或加载器，
+其中 Darwin 项不表示本工程已具备 XNU 引导支持。菜单由 `uefi/config.json`
+统一提供给嵌入默认配置和磁盘生成器。

@@ -1,0 +1,25 @@
+[Defines]
+  INF_VERSION = 0x00010006
+  BASE_NAME = DisplayBridge
+  FILE_GUID = 7a4dbf51-ec22-48a9-bb4a-6b94235c0510
+  MODULE_TYPE = UEFI_APPLICATION
+  ENTRY_POINT = Pj4edk2BridgeMain
+[Sources]
+  DisplayBridge.c
+[Packages]
+  MdePkg/MdePkg.dec
+  EmbeddedPkg/EmbeddedPkg.dec
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  BaseLib
+  BaseMemoryLib
+  DevicePathLib
+  MemoryAllocationLib
+  UefiLib
+  FdtLib
+[Protocols]
+  gEfiLoadedImageProtocolGuid
+  gEfiGraphicsOutputProtocolGuid
+[Guids]
+  gFdtTableGuid

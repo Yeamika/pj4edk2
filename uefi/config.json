@@ -1,0 +1,62 @@
+{
+  "mode": "uefi",
+  "version": "0.1.0",
+  "viewport": [
+    1920,
+    1200
+  ],
+  "display_id": "main",
+  "timeout_seconds": 0,
+  "default_entry_id": "linux-a",
+  "esp_discovery": true,
+  "entries": [
+    {
+      "id": "linux-a",
+      "name": "LinuxA",
+      "path": "\\EFI\\SmallLinux\\DisplayBridge.efi",
+      "icon": "system",
+      "parameters": {
+        "uefi_options": "\\EFI\\SmallLinux\\BOOTAA64.EFI console=ttyAMA0 console=tty0 rdinit=/init initrd=\\EFI\\SmallLinux\\initramfs.cpio.gz video=efifb:off quiet loglevel=7"
+      }
+    },
+    {
+      "id": "linux-b",
+      "name": "LinuxB",
+      "path": "\\EFI\\SmallLinux\\DisplayBridge.efi",
+      "icon": "system",
+      "parameters": {
+        "uefi_options": "\\EFI\\SmallLinux\\BOOTAA64.EFI console=ttyAMA0 console=tty0 rdinit=/init initrd=\\EFI\\SmallLinux\\initramfs.cpio.gz video=efifb:off quiet loglevel=6"
+      }
+    },
+    {
+      "id": "android",
+      "name": "Android",
+      "path": "\\EFI\\Android\\BOOTAA64.EFI",
+      "icon": "system",
+      "parameters": {}
+    },
+    {
+      "id": "windows",
+      "name": "Windows",
+      "path": "\\EFI\\Microsoft\\Boot\\bootmgfw.efi",
+      "icon": "system",
+      "parameters": {}
+    },
+    {
+      "id": "darwin",
+      "name": "Darwin",
+      "path": "\\EFI\\Darwin\\BOOTAA64.EFI",
+      "icon": "system",
+      "parameters": {}
+    },
+    {
+      "id": "baremetal",
+      "name": "Baremetal",
+      "path": "\\EFI\\Baremetal\\BOOTAA64.EFI",
+      "icon": "system",
+      "parameters": {}
+    }
+  ],
+  "battery_percent": null,
+  "external_power": null
+}
