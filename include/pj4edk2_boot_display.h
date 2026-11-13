@@ -30,8 +30,10 @@ static inline int pj4edk2_display_validate_cells(const unsigned int *v,
 {
     unsigned long long address, scan_bytes, row_bytes;
 
-    if (!v || count != PJ4EDK2_DISPLAY_CELLS || v[0] != 1 || v[1] != 2 ||
-        v[19] != 1 || v[9] != 1 || v[18] != 2 || !v[4] || !v[5] ||
+    if (!v || count != PJ4EDK2_DISPLAY_CELLS || (v[0] != 1 && v[0] != 2) || v[1] != 2 ||
+        v[19] != 1 ||
+        !((v[0] == 1 && v[9] == 1 && v[18] == 2) ||
+          (v[0] == 2 && (v[9] == 2 || v[9] == 3) && v[18] == 4)) || !v[4] || !v[5] ||
         !v[6] || !v[7] || !v[8] || v[5] > v[4] ||
         !pj4edk2_display_rotation_valid(v[16]) || !pj4edk2_display_rotation_valid(v[17]) ||
         !pj4edk2_display_rectangle_valid(v[10], v[11], v[12], v[13], v[14], v[15]))
