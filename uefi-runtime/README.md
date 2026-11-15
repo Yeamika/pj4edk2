@@ -1,20 +1,28 @@
 # PocketJS UEFI runtime
 
+Input is buffered in a bounded 128-event queue on the UI thread. Consecutive
+pointer movements are coalesced without replacing button transitions or crossing
+commands. Producers reserve space for an entire input poll and stop polling when
+that space is unavailable. During the remaining 16 ms frame budget, the host polls
+input between 1 ms stalls. `PJ4EDK2_INPUT_QUEUE` reports oldest queued event age and
+cumulative coalescing. JS execution and synchronous GOP presentation still block
+input collection; this queue does not introduce another thread or an interrupt
+handler, and does not skip animation ticks.
+
 The host prefers a standard 32-bit BGRX GOP mode with unchanged or swapped geometry.
 It renders directly to the framebuffer on landscape outputs; portrait outputs
 retain a logical UI buffer and rotate damage directly into physical scanout.
-If a portrait platform offers a landscape mode, hardware owns that rotation:
-the UI writes landscape scanout directly, without a retained logical or rotation
-buffer. Touch and the restored EFI boot-display record retain portrait-panel
-coordinates. The optional `pj4edk2_display.h` protocol explicitly identifies
-this mapping and the compatibility handoff mode. Hardware implements the clockwise quarter turn
-relative to its inherited panel mounting; geometry alone is not a rotation API.
-A same-rectangle VideoToVideo BLT presents CPU framebuffer writes. Platforms
-without a compatible mode keep the existing BLT/rotation-buffer path.
-The compatibility GOP mode (or entry mode without platform metadata) is restored after releasing all VM framebuffer references,
-before launching an EFI child, reloading the menu or returning to firmware.
-A failed restoration blocks child launch. This keeps existing OS loaders on
-their inherited display ABI without board-specific logic in the runtime.
+The optional `pj4edk2_display.h` revision 2 protocol describes any remaining
+panel-to-pointer mapping and prepares a stable framebuffer for EFI children.
+Platforms with normalized input report zero mapping. A same-rectangle
+VideoToVideo BLT presents CPU framebuffer writes. Generic portrait platforms
+retain the BLT/rotation-buffer fallback.
+
+After releasing VM framebuffer references, the host calls `prepare_handoff`.
+The platform retains the native mode and format, pinning the final frame into
+reserved memory when necessary. It does not restore a compatibility mode or
+rotate pixels on menu exit. A failed handoff blocks child launch and can be
+retried safely.
 
 This directory implements the ARM64 EFI host for the shared interfaces and
 default pages. It uses generic EDK II and standard UEFI protocols. Board

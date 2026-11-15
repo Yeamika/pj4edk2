@@ -26,7 +26,7 @@ pub fn merge(config: &mut UiConfig, mut paths: Vec<String>, mut exists: impl FnM
         let parts: Vec<_>=path.split('\\').filter(|p|!p.is_empty()).collect();
         if path.len()>240 || parts.len()!=3 || !parts[0].eq_ignore_ascii_case("EFI") ||
             parts[1].len()>96 || parts[1].starts_with('.') ||
-            ["BOOT","pj4edk2","Tools"].iter().any(|p|parts[1].eq_ignore_ascii_case(p)) ||
+            ["BOOT","pj4edk2","PocketJS","Tools"].iter().any(|p|parts[1].eq_ignore_ascii_case(p)) ||
             !parts[2].to_ascii_lowercase().starts_with("boot") || !parts[2].to_ascii_lowercase().ends_with(".efi") {
             continue;
         }
@@ -66,7 +66,8 @@ mod tests {
     fn ignores_helpers_and_bounds_menu_size() {
         let mut c=cfg();let mut paths=Vec::new();
         for n in 0..20 { paths.push(format!("\\EFI\\OS{n}\\bootaa64.efi")); }
-        paths.extend(["\\EFI\\BOOT\\BOOTAA64.EFI".into(),"\\EFI\\Tools\\Shell.efi".into(),"\\EFI\\pj4edk2\\bootaa64.efi".into()]);
+        paths.extend(["\\EFI\\BOOT\\BOOTAA64.EFI".into(),"\\EFI\\Tools\\Shell.efi".into(),
+            "\\EFI\\pj4edk2\\bootaa64.efi".into(),"\\EFI\\PocketJS\\bootaa64.efi".into()]);
         merge(&mut c,paths,|_|false);assert_eq!(c.entries.len(),8);
         assert!(c.entries.iter().all(|e|e.name.starts_with("OS")));c.validate().unwrap();
     }
@@ -74,5 +75,12 @@ mod tests {
     fn policy_is_opt_in_and_rejects_mistyped_flags() {
         assert!(!enabled(b"{}").unwrap());assert!(enabled(br#"{"esp_discovery":true}"#).unwrap());
         assert!(enabled(br#"{"esp_discovery":"yes"}"#).is_err());
+    }
+    #[test]
+    fn pocketjs_fallback_is_not_a_recursive_system_entry() {
+        let mut c=cfg();
+        merge(&mut c,alloc::vec!["\\EFI\\PocketJS\\BOOTAA64.EFI".into(),
+            "\\EFI\\Zed\\bootaa64.efi".into()],|_|false);
+        assert_eq!(c.entries.len(),1);assert_eq!(c.entries[0].name,"Zed");
     }
 }

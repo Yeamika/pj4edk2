@@ -4,8 +4,7 @@
     R.makeSettings = () => {
         R.settingsWidth = 448; R.settingsHeight = 220; R.settingsX = R.w - R.settingsWidth - 36; R.settingsY = 104; R.settingsVisual = 0; R.settingsFocus = 0;
         R.settingsDrawnVisible = null; R.settingsDrawnVisual = null; R.keypadOpen = false;
-        R.settingsShade = R.box(0, R.L.top, R.w, R.h - R.L.top, 0x326584);
-        R.prop(R.settingsShade, 'z', 80);
+        // Transparent backdrop: no viewport-sized alpha-blended shade node.
         R.settingsShadow = R.box(R.settingsX - 3, 111, 454, 220, C.shadow, R.root, 12);
         R.prop(R.settingsShadow, 'z', 99);
         R.settingsPanel = R.box(R.settingsX, R.settingsY, 448, 220, C.selected, R.root, 10);
@@ -119,13 +118,12 @@
         R.prop(R.settingsShadow, 'h', R.settingsHeight);
         R.settingsY = 104 + (1 - p) * 10;
         if (R.settingsDrawnVisible !== visible) {
-            for (const node of [R.settingsPanel, R.settingsShadow, R.settingsShade]) R.show(node, visible);
+            for (const node of [R.settingsPanel, R.settingsShadow]) R.show(node, visible);
             R.settingsDrawnVisible = visible;
         }
         if (R.settingsDrawnVisual !== p) {
             R.prop(R.settingsPanel, 'top', R.settingsY); R.opacity(R.settingsPanel, p);
             R.prop(R.settingsShadow, 'top', R.settingsY + 7); R.opacity(R.settingsShadow, p * 0.32);
-            R.opacity(R.settingsShade, p * 0.13);
             R.settingsDrawnVisual = p;
         }
         R.label(R.settingsLabel, 'Auto boot delay' + (R.settingsDirty() ? ' *' : ''));

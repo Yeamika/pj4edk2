@@ -7,7 +7,7 @@
 #include <Uefi.h>
 #include <Protocol/GraphicsOutput.h>
 #define PJ4EDK2_DISPLAY_GUID {0x9ac2ec81,0x3a76,0x4cec,{0x98,0xa2,0x4e,0x7d,0x51,0x25,0x18,0x63}}
-#define PJ4EDK2_DISPLAY_REVISION 1
+#define PJ4EDK2_DISPLAY_REVISION 2
 typedef struct PJ4EDK2_DISPLAY_PROTOCOL PJ4EDK2_DISPLAY_PROTOCOL;
 struct PJ4EDK2_DISPLAY_PROTOCOL {
   UINT32 revision,size;
@@ -16,5 +16,7 @@ struct PJ4EDK2_DISPLAY_PROTOCOL {
   /* Clockwise framebuffer-to-native-panel rotation, before panel mounting.
    * Return MAX_UINT32 for an unsupported mode. Boot Services lifetime only. */
   UINT32 (EFIAPI *rotation)(PJ4EDK2_DISPLAY_PROTOCOL *This,UINT32 Mode);
+  /* Freeze the current layout for a child without restoring an old mode. */
+  EFI_STATUS (EFIAPI *prepare_handoff)(PJ4EDK2_DISPLAY_PROTOCOL *This);
 };
 #endif

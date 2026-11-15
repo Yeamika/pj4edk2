@@ -28,6 +28,8 @@ unsafe extern "C" {
     fn pjb_display_start()->usize;
     fn pjb_display_stop()->usize;
     fn pjb_display_rotation()->u32;
+    fn pjb_display_rotate(source:*const u8,source_bytes:usize,destination:*mut u8,destination_bytes:usize,
+        destination_stride:usize,width:u32,height:u32,x:u32,y:u32,w:u32,h:u32)->usize;
 }
 fn log(text: &str) { unsafe { pjb_log(text.as_ptr(),text.len()); } }
 
@@ -81,7 +83,23 @@ impl crate::settings::Storage for EspSettings {
 }
 
 #[derive(Clone,Copy,Default)]
-struct BlitStats { regions:usize, pixels:u64, calls:usize, rotate_ms:u64, blt_ms:u64 }
+struct BlitStats { regions:usize, pixels:u64, calls:usize, rotate_ms:u64, blt_ms:u64, hardware_rotations:usize }
+#[derive(Clone, Copy, Default)]
+struct RasterStats { us:u64, calls:u64, wait_us:u64 }
+struct ProfileRaster { inner:RasterRenderer, stats:Rc<Cell<RasterStats>> }
+impl Renderer for ProfileRaster {
+    type Submission=();
+    fn descriptor(&self)->RendererDescriptor { self.inner.descriptor() }
+    fn render(&mut self, frame:&mut FrameInput<'_>)->Result<(),RenderError> {
+        let start=profile_clock_us(); let result=self.inner.render(frame);
+        let mut s=self.stats.get(); s.us+=profile_clock_us().saturating_sub(start);s.calls+=1;self.stats.set(s);result
+    }
+    fn wait(&mut self, submission:&())->Result<(),RenderError> {
+        let start=profile_clock_us();let result=self.inner.wait(submission);
+        let mut s=self.stats.get();s.wait_us+=profile_clock_us().saturating_sub(start);self.stats.set(s);result
+    }
+    fn retire(&mut self, submission:()) { self.inner.retire(submission); }
+}
 struct NativeFramebuffer { base:*mut u8, bytes:usize, stride:usize }
 struct GopDisplay { protocol: *mut gop::Protocol, pixels: Vec<u8>, scanout: Vec<u8>, native:Option<NativeFramebuffer>, portrait:bool, physical_width:usize, descriptor: DisplayDescriptor, stats:Rc<Cell<BlitStats>> }
 impl DisplayOutput for GopDisplay {
@@ -117,9 +135,14 @@ impl DisplayOutput for GopDisplay {
             if let Some(native)=&self.native {
                 let mapped=if self.portrait {
                     let started=counter();
-                    let target=unsafe {core::slice::from_raw_parts_mut(native.base,native.bytes)};
-                    crate::rotation::copy_region_strided(&self.pixels,self.descriptor.width as usize,
-                        self.descriptor.height as usize,*region,target,native.stride);
+                    let status=unsafe {pjb_display_rotate(self.pixels.as_ptr(),self.pixels.len(),native.base,
+                        native.bytes,native.stride,self.descriptor.width,self.descriptor.height,
+                        region.x,region.y,region.width,region.height)};
+                    if status==0 {stats.hardware_rotations+=1;} else {
+                        let target=unsafe {core::slice::from_raw_parts_mut(native.base,native.bytes)};
+                        crate::rotation::copy_region_strided(&self.pixels,self.descriptor.width as usize,
+                            self.descriptor.height as usize,*region,target,native.stride);
+                    }
                     stats.rotate_ms+=elapsed_ms(started);
                     crate::rotation::region(self.descriptor.height,*region)
                 } else {*region};
@@ -308,13 +331,16 @@ fn run(st:&efi::SystemTable,child_status:Option<usize>)->Result<RunResult,String
     if !portrait {if let Some(native)=&native {descriptor.stride_bytes=native.stride;}}
     // The logical buffer and GOP retain untouched pixels between submissions.
     descriptor.partial_refresh=true;
+    vm.set_profile_clock(Some(profile_clock_us));
+    let raster_stats=Rc::new(Cell::new(RasterStats::default()));
+    let renderer=vm.add_renderer(ProfileRaster {inner:RasterRenderer::new(1).map_err(|e|format!("raster {e:?}"))?,stats:raster_stats.clone()}).map_err(|e|format!("renderer {e:?}"))?;
     let blit_stats=Rc::new(Cell::new(BlitStats::default()));
     let pixels=if native.is_some()&&!portrait {Vec::new()} else {pixel_buffer(bytes)?};
     let scanout=if portrait&&native.is_none() {pixel_buffer(bytes.min(2*1024*1024))?} else {Vec::new()};
     log(&format!("PJ4EDK2_DISPLAY native_scanout={} software_rotation={portrait} hardware_rotation={hardware_rotation}",native.is_some()));
     log(&format!("PJ4EDK2_DISPLAY_BUFFERS logical={} rotation={}",pixels.len(),scanout.len()));
     let direct_scanout=native.is_some();
-    vm.add_display(GopDisplay{protocol:gop,pixels,scanout,native,portrait,physical_width:physical[0] as usize,descriptor,stats:blit_stats.clone()},RendererId::SOFTWARE).map_err(|e|format!("display {e:?}"))?;
+    vm.add_display(GopDisplay{protocol:gop,pixels,scanout,native,portrait,physical_width:physical[0] as usize,descriptor,stats:blit_stats.clone()},renderer).map_err(|e|format!("display {e:?}"))?;
     let ui_package=read_ui_package()?;
     let page=BootPage::load_with_package(&mut vm,&config,ui_package.as_deref()).map_err(|e|format!("page {e:?}"))?;
     log(if ui_package.is_some(){"PJ4EDK2_UI_PACKAGE loaded"}else{"PJ4EDK2_UI_PACKAGE embedded"});
@@ -353,6 +379,7 @@ fn run(st:&efi::SystemTable,child_status:Option<usize>)->Result<RunResult,String
     let _fastboot=Fastboot;
     let mut fastboot_busy=false;
     let mut fastboot_reset_deadline=None;
+    let mut input_queue=crate::event_queue::EventQueue::new();
     if let Some(status)=child_status.filter(|status|*status!=0) {
         settings_events.push(UiEvent::BootFailed{status:format!("0x{status:x}")});
     }
@@ -384,8 +411,13 @@ fn run(st:&efi::SystemTable,child_status:Option<usize>)->Result<RunResult,String
             log(&format!("PJ4EDK2_FASTBOOT_RESET_PENDING stop=0x{status:x}"));
         }
         if flags&2!=0 { log("PJ4EDK2_FASTBOOT_CONTINUE menu active"); }
-        let (mut input,exit)=events(st,touch,panel_size,panel_portrait,&mut last,&mut origin,&mut moved,&mut trace)?;
+        let (sampled,exit)=if input_queue.can_poll() {
+            events(st,touch,panel_size,panel_portrait,&mut last,&mut origin,&mut moved,&mut trace)?
+        } else { (Vec::new(),false) };
         if exit { break; }
+        for event in sampled { input_queue.push(event,now).map_err(|_|String::from("input queue capacity invariant"))?; }
+        let mut input=Vec::new();
+        let queue_age_ms=input_queue.drain(elapsed_ms(started),&mut input);
         input.append(&mut settings_events);
         if now>=next_power {
             let power=read_power(now>=next_frame_log);
@@ -400,16 +432,20 @@ fn run(st:&efi::SystemTable,child_status:Option<usize>)->Result<RunResult,String
         }
         let tick_started=counter();
         blit_stats.set(BlitStats::default());
+        raster_stats.set(RasterStats::default());
         let actions=page.tick(&mut vm,now,&input).map_err(|e|format!("tick {e:?}"))?;
         let tick_ms=elapsed_ms(tick_started);
         if frames==0 { startup_ms=elapsed_ms(boot_started); }
         if tick_ms>=30 && now>=next_slow_log {
             let stats=blit_stats.get();
-            log(&format!("PJ4EDK2_FRAME_SLOW elapsed_ms={now} tick_ms={tick_ms} stages_ms={:?} input={} regions={} pixels={} blits={} rotate_ms={} blt_ms={}",page.timing.get(),input.len(),stats.regions,stats.pixels,stats.calls,stats.rotate_ms,stats.blt_ms));
+            log(&format!("PJ4EDK2_FRAME_SLOW elapsed_ms={now} tick_ms={tick_ms} stages_ms={:?} input={} regions={} pixels={} blits={} rotate_ms={} blt_ms={} hardware_rotations={}",page.timing.get(),input.len(),stats.regions,stats.pixels,stats.calls,stats.rotate_ms,stats.blt_ms,stats.hardware_rotations));
+            let r=raster_stats.get();
+            log(&format!("PJ4EDK2_PROFILE_US advance_draw={:?} raster={} raster_calls={} raster_wait={} gop_ms={} regions={} pixels={}",vm.profile_us(),r.us,r.calls,r.wait_us,stats.blt_ms,stats.regions,stats.pixels));
             next_slow_log=now+1000;
         }
         frames+=1;tick_total+=tick_ms;tick_max=tick_max.max(tick_ms);
         if now>=next_frame_log {
+            log(&format!("PJ4EDK2_INPUT_QUEUE age_ms={queue_age_ms} coalesced={}",input_queue.coalesced));
             log(&format!("PJ4EDK2_FRAME_OK elapsed_ms={now} frames={frames} tick_avg_ms={} tick_max_ms={tick_max} stages_ms={:?} run_to_first_submit_ms={startup_ms} gop={}x{} modes={} native={} hw_rotation={hardware_rotation}",tick_total/frames,page.timing.get(),physical[0],physical[1],unsafe {(*(*gop).mode).max_mode},direct_scanout));
             next_frame_log=now+10_000;
         }
@@ -499,7 +535,7 @@ fn run(st:&efi::SystemTable,child_status:Option<usize>)->Result<RunResult,String
                     vm.complete_presentation().map_err(|e|format!("quiesce {e:?}"))?;
                     let entry=config.entries.iter().find(|e|e.id==id&&e.path==path).ok_or("unknown boot entry")?;
                     let options=entry.parameters.get("uefi_options").and_then(|v|v.as_str()).unwrap_or("").into();
-                    let display=crate::boot_display::prepare(&config,&display_regions,[w,h],panel_portrait)?;
+                    let display=crate::boot_display::prepare(&config,&display_regions,[w,h],portrait)?;
                     log(&format!("PJ4EDK2_BOOT_REQUEST id={id} path={path} display={display:?}"));
                     return Ok(RunResult::Boot(BootRequest{path,options,display}));
                 }
@@ -508,8 +544,15 @@ fn run(st:&efi::SystemTable,child_status:Option<usize>)->Result<RunResult,String
         }
         // Rendering/input already consumed part of this frame's time budget.
         // Do not add another full frame of latency after a slow update.
-        let spent=elapsed_ms(started).saturating_sub(now);
-        if spent<16 {unsafe { (bs.stall)((16-spent) as usize*1000); }}
+        // Keep collecting input during the frame budget instead of one long
+        // blind stall. Leave space for a complete poll, including release/click.
+        while elapsed_ms(started).saturating_sub(now)<16 && input_queue.can_poll() {
+            let at=elapsed_ms(started);
+            let (sampled,exit)=events(st,touch,panel_size,panel_portrait,&mut last,&mut origin,&mut moved,&mut trace)?;
+            if exit { vm.complete_presentation().map_err(|e|format!("finish {e:?}"))?; return Ok(RunResult::Exit); }
+            for event in sampled { input_queue.push(event,at).map_err(|_|String::from("input queue capacity invariant"))?; }
+            (bs.stall)(1000);
+        }
     }
     vm.complete_presentation().map_err(|e|format!("finish {e:?}"))?;
     Ok(RunResult::Exit)
@@ -565,6 +608,11 @@ fn read_power(trace:bool)->crate::power::PowerState {
 }
 
 pub(crate) fn counter()->u64 { let value;unsafe { core::arch::asm!("mrs {}, cntvct_el0",out(reg)value,options(nomem,nostack)); }value }
+fn profile_clock_us()->u64 {
+    let frequency:u64; unsafe { core::arch::asm!("mrs {}, cntfrq_el0",out(reg)frequency,options(nomem,nostack)); }
+    let ticks=counter(); let frequency=frequency.max(1);
+    (ticks/frequency)*1_000_000+(ticks%frequency)*1_000_000/frequency
+}
 pub(crate) fn elapsed_ms(start:u64)->u64 { let frequency:u64;unsafe { core::arch::asm!("mrs {}, cntfrq_el0",out(reg)frequency,options(nomem,nostack)); } counter().saturating_sub(start)/(frequency/1000).max(1) }
 
 #[unsafe(no_mangle)]
@@ -584,10 +632,10 @@ pub unsafe extern "C" fn pjb_main(_image:efi::Handle,table:*mut efi::SystemTable
     let mut child_status=None;
     loop {
       let result=run(unsafe { &*table },child_status);
-      // run() has released all framebuffer references before restoring the
-      // inherited GOP mode. A failed restore must never launch an EFI child.
+      // Release framebuffer references, then freeze the current landscape layout.
+      // Never restore the old portrait GOP mode.
       let restored=unsafe {pjb_display_stop()};
-      if restored!=0 {log(&format!("PJ4EDK2_DISPLAY_RESTORE_FAILED status=0x{restored:x}"));return 1;}
+      if restored!=0 {log(&format!("PJ4EDK2_DISPLAY_HANDOFF_FAILED status=0x{restored:x}"));return 1;}
       match result {
         Ok(RunResult::Boot(request))=>{
             if request.path.contains('\0')||request.options.contains('\0') { return 1; }

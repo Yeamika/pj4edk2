@@ -17,10 +17,11 @@ static UINT32 fastboot_flags;
 static unsigned fastboot_starts,fastboot_stops;
 static EFI_STATUS display_restore_status;
 static unsigned display_restores;
-static EFI_STATUS EFIAPI RestoreDisplay(EFI_GRAPHICS_OUTPUT_PROTOCOL *This,UINT32 Mode) {
+static EFI_STATUS EFIAPI RestoreDisplay(PJ4EDK2_DISPLAY_PROTOCOL *This) {
   ++display_restores;return display_restore_status;
 }
-static EFI_GRAPHICS_OUTPUT_PROTOCOL display_gop={.SetMode=RestoreDisplay};
+static EFI_GRAPHICS_OUTPUT_PROTOCOL display_gop;
+static PJ4EDK2_DISPLAY_PROTOCOL display_orientation={.prepare_handoff=RestoreDisplay};
 static EFI_STATUS EFIAPI FastbootStart(PJ4EDK2_FASTBOOT_PROTOCOL *This) { ++fastboot_starts;return EFI_SUCCESS; }
 static EFI_STATUS EFIAPI FastbootStop(PJ4EDK2_FASTBOOT_PROTOCOL *This) { ++fastboot_stops;return fastboot_stop_status; }
 static EFI_STATUS EFIAPI FastbootPoll(PJ4EDK2_FASTBOOT_PROTOCOL *This,UINT32 *Flags) { *Flags=fastboot_flags;return EFI_SUCCESS; }
@@ -126,10 +127,10 @@ int main(void) {
   CHECK(pjb_shutdown(&system)==EFI_DEVICE_ERROR && reset_calls==1 && resumed==1);
   CHECK(pjb_shutdown(NULL)==EFI_UNSUPPORTED);
 
-  /* A failed display restore must block child execution before hardware
+  /* A failed display handoff must block child execution before hardware
    * quiesce; retain the mode lease so the caller can retry safely. */
   unsigned display_children=started,display_quiesced=stopped;
-  DisplayGop=&display_gop;DisplayModeLeased=TRUE;
+  DisplayGop=&display_gop;DisplayOrientation=&display_orientation;DisplayModeLeased=TRUE;
   display_restore_status=EFI_TIMEOUT;
   CHECK(StartChild((EFI_HANDLE)1,options,NULL)==EFI_TIMEOUT &&
         started==display_children && stopped==display_quiesced && DisplayModeLeased);

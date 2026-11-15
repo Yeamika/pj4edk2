@@ -11,16 +11,15 @@
         R.rowGap = 36; R.arcDepth = 32; R.moveAt = 260; R.moveMs = 690;
         // A long, shallow right bulge; the outermost card aligns with the heading.
         R.arcEdge = R.cardX - R.rowGap - R.arcDepth;
-        // One square-edged span per physical pixel row, including the longer docked line.
-        // Cancel the page scale here so layout never rounds subpixel row heights to zero.
-        R.curveRoot = R.box(0, 0, R.cfg.viewport[0], R.cfg.viewport[1], null);
-        R.prop(R.curveRoot, 'originX', -0.5); R.prop(R.curveRoot, 'originY', -0.5);
-        R.prop(R.curveRoot, 'scale', 1 / R.scale);
+        // Ten chord segments approximate the shallow parabola. Reuse the scene
+        // parent: the curve adds exactly ten nodes, including no extra group.
         R.linePixels = Math.max(1, Math.round(2 * R.scale));
         R.lines = [];
-        const capacity = Math.ceil((R.lineEndY - (R.L.top + 8)) * R.scale);
-        for (let i = 0; i < capacity; i++) {
-            R.lines.push(R.box(0, 0, R.linePixels, 1, C.background, R.curveRoot));
+        for (let i = 0; i < 10; i++) {
+            const id = R.box(0, 0, R.linePixels / R.scale, 1, null);
+            R.prop(id, 'originX', -0.5); R.prop(id, 'originY', -0.5);
+            R.prop(id, 'gradDir', 1); // Local top to bottom, before rotation.
+            R.lines.push(id);
         }
     };
     R.bootCurveState = elapsed => {
@@ -58,17 +57,30 @@
             previousCurve.dock === curve.dock && previousCurve.scale === R.scale &&
             previousCurve.arcEdge === R.arcEdge && previousCurve.arcDepth === R.arcDepth &&
             previousCurve.lineX === R.lineX && previousCurve.linePixels === R.linePixels) return;
-        const first = Math.round(R.curve.startY * R.scale);
-        const rows = Math.round(R.curve.endY * R.scale) - first;
+        const first = Math.round(curve.startY * R.scale);
+        const last = Math.round(curve.endY * R.scale);
+        const width = R.linePixels / R.scale;
+        const fade = u => R.mix(C.background, C.line,
+            0.82 * Math.pow(Math.max(0, Math.sin(Math.PI * u)), 0.9));
         for (let i = 0; i < R.lines.length; i++) {
-            const id = R.lines[i], visible = count > 1 && i < rows;
+            const id = R.lines[i], visible = count > 1 && last > first;
             R.show(id, visible);
             if (!visible) continue;
-            const y = (first + i + 0.5) / R.scale;
-            const strength = 0.82 * Math.pow(Math.sin(Math.PI * (i + 0.5) / rows), 0.9);
-            R.fill(id, R.mix(C.background, C.line, strength));
-            R.prop(id, 'left', Math.round(R.arcXAtY(y) * R.scale - R.linePixels / 2));
-            R.prop(id, 'top', first + i);
+            const u0 = i / R.lines.length, u1 = (i + 1) / R.lines.length;
+            const y0 = (first + (last - first) * u0) / R.scale;
+            const y1 = (first + (last - first) * u1) / R.scale;
+            const x0 = R.arcXAtY(y0), x1 = R.arcXAtY(y1);
+            const dx = x1 - x0, dy = y1 - y0, length = Math.hypot(dx, dy);
+            const angle = -Math.atan2(dx, dy);
+            // Anchor each thin rectangle on its centerline. A one-physical-
+            // pixel joint overlap prevents gaps after layout/pixel snapping.
+            R.prop(id, 'left', x0 - width / 2 * Math.cos(angle));
+            R.prop(id, 'top', y0 - width / 2 * Math.sin(angle));
+            R.prop(id, 'w', width);
+            R.prop(id, 'h', length + (i + 1 < R.lines.length ? 1 / R.scale : 0));
+            R.prop(id, 'rotate', angle * 180 / Math.PI);
+            R.prop(id, 'gradFrom', R.color(fade(u0)));
+            R.prop(id, 'gradTo', R.color(fade(u1)));
         }
         previousCurve = {count, startY: curve.startY, endY: curve.endY, dock: curve.dock,
             scale: R.scale, arcEdge: R.arcEdge, arcDepth: R.arcDepth,

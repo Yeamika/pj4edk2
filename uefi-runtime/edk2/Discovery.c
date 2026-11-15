@@ -77,7 +77,8 @@ UINTN pjb_esp_entries(CHAR16 *Paths, UINTN Capacity, UINTN *Used)
     while (SIZE_OF_EFI_FILE_INFO+(N+1)*sizeof(CHAR16)<=Info->Size && Info->FileName[N]) ++N;
     if (SIZE_OF_EFI_FILE_INFO+(N+1)*sizeof(CHAR16)>Info->Size) { Status=EFI_VOLUME_CORRUPTED; break; }
     if (N==0 || N>96 || Info->FileName[0]==L'.' || Same(Info->FileName,L"BOOT") ||
-        Same(Info->FileName,L"pj4edk2") || Same(Info->FileName,L"Tools")) continue;
+        Same(Info->FileName,L"pj4edk2") || Same(Info->FileName,L"PocketJS") ||
+        Same(Info->FileName,L"Tools")) continue;
     for (I=0; I<N; ++I) if (Info->FileName[I]<32 || Info->FileName[I]==L'\\' || Info->FileName[I]==L'/') break;
     if (I!=N) continue;
     StrCpyS(Path,PATH_CHARS,L"\\EFI\\");

@@ -6,6 +6,8 @@ import tempfile
 import unittest
 
 class SettingsFileTest(unittest.TestCase):
+    def test_rotation_provider_lifetime(self):
+        self.compile_and_run('display_rotation.c')
     def test_display_mode_lease(self):
         self.compile_and_run('display_mode.c')
     def test_fastboot_protocol(self):

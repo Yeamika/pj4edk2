@@ -13,7 +13,9 @@ pub use pocket_drivers::{
 pub use pocket_present::{DisplayId, PresentError, RendererId};
 pub use pocket_raster::{RasterRenderer, render_operation};
 
-pub(crate) struct Presentation(Coordinator);
+pub(crate) struct Presentation(Coordinator, Option<fn() -> u64>, [u64; 3]);
+fn stamp(clock: Option<fn() -> u64>) -> u64 { clock.map_or(0, |clock| clock()) }
+
 
 impl Presentation {
     pub fn new(budget: usize) -> Result<Self, PresentError> {
@@ -22,7 +24,7 @@ impl Presentation {
         // borrow ends. Completion and page replacement release only retired
         // versions. No caller receives direct access to this coordinator.
         unsafe { coordinator.enable_deferred_zero_copy() };
-        Ok(Self(coordinator))
+        Ok(Self(coordinator, None, [0; 3]))
     }
 
     pub fn add_renderer<R: Renderer + 'static>(
@@ -44,10 +46,17 @@ impl Presentation {
     {
         self.0.add_display(display, renderer)
     }
+    pub fn set_profile_clock(&mut self, clock: Option<fn() -> u64>) { self.1=clock; }
+    pub fn profile(&self) -> [u64; 3] { self.2 }
     pub fn present(&mut self, ui: &mut Ui) -> Result<(), PresentError> {
+        let a=stamp(self.1);
         ui.draw();
+        let b=stamp(self.1);
         let result = self.0.present(ui.current_draw_list(), None, &pj4edk2_rendering::PixelResources(&*ui));
+        let c=stamp(self.1);
         self.track_textures(ui);
+        let d=stamp(self.1);
+        self.2=[b.saturating_sub(a),c.saturating_sub(b),d.saturating_sub(c)];
         result
     }
     pub fn complete(&mut self, ui: &mut Ui) -> Result<(), PresentError> {

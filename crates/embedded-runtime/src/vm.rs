@@ -35,6 +35,8 @@ pub struct PocketJs {
     faulted: bool,
     mailbox: services::Shared,
     outputs: Presentation,
+    profile_clock: Option<fn() -> u64>,
+    profile_advance: [u64; 3],
     debug: crate::debug::DebugChannel,
 }
 
@@ -95,6 +97,8 @@ impl PocketJs {
             faulted: false,
             mailbox: services::new(),
             outputs,
+            profile_clock: None,
+            profile_advance: [0; 3],
             debug: crate::debug::DebugChannel::default(),
         })
     }
@@ -278,12 +282,26 @@ impl PocketJs {
 
     /// Advance user input and UI without submitting a display frame. The BSP
     /// can schedule boot work or submit its native scene before present().
+    /// Optional monotonic microsecond clock, owned by the embedding host.
+    /// None disables measurement. No board clock or scheduler is assumed.
+    pub fn set_profile_clock(&mut self, clock: Option<fn() -> u64>) {
+        self.profile_clock=clock; self.outputs.set_profile_clock(clock);
+    }
+    /// Input encoding, guest frame, UI tick, draw list, coordinator, texture retirement.
+    /// Coordinator time includes renderer and display callbacks; do not add it
+    /// to those nested measurements when calculating a frame total.
+    pub fn profile_us(&self) -> [u64; 6] {
+        let p=self.outputs.profile();
+        [self.profile_advance[0],self.profile_advance[1],self.profile_advance[2],p[0],p[1],p[2]]
+    }
+    fn profile_stamp(&self) -> u64 { self.profile_clock.map_or(0, |clock| clock()) }
     pub fn advance(
         &mut self,
         generation: UserGeneration,
         input: &InputFrame<'_>,
     ) -> Result<(), Error> {
         self.checked(generation)?;
+        let profile_start=self.profile_stamp();
         let encoded = {
             let mut core = self.ops.core_mut().map_err(|_| Error::Runtime)?;
             self.user
@@ -325,9 +343,13 @@ impl PocketJs {
         };
         self.arm();
         let guest = self.user.as_ref().unwrap().guest;
+        let profile_guest=self.profile_stamp();
         let status = unsafe { self.table().frame.unwrap()(guest.as_ptr().cast(), &frame) };
         self.status(status)?;
+        let profile_tick=self.profile_stamp();
         self.ops.core_mut().map_err(|_| Error::Runtime)?.ui.tick();
+        let profile_end=self.profile_stamp();
+        self.profile_advance=[profile_guest.saturating_sub(profile_start),profile_tick.saturating_sub(profile_guest),profile_end.saturating_sub(profile_tick)];
         Ok(())
     }
 

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MIT
- * Standard GOP mode lease. Restore the inherited mode before EFI children.
+ * Standard GOP selection and same-layout handoff to EFI children.
  * No board registers, framebuffer addresses or pixel-format conversion here.
  */
 #include <Uefi.h>
@@ -7,19 +7,52 @@
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include "pj4edk2_display.h"
+#include "pj4edk2_rotate.h"
 
 static EFI_GRAPHICS_OUTPUT_PROTOCOL *DisplayGop;
-static UINT32 DisplayOriginalMode;
+static PJ4EDK2_DISPLAY_PROTOCOL *DisplayOrientation;
 static BOOLEAN DisplayModeLeased;
 static UINT32 DisplayPanelRotation;
+static PJ4EDK2_ROTATE_PROTOCOL *DisplayRotator;
+static BOOLEAN RotationDisabled;
+
+UINTN pjb_display_rotate(CONST VOID *Source,UINTN SourceBytes,VOID *Destination,UINTN DestinationBytes,
+    UINTN DestinationStride,UINT32 Width,UINT32 Height,UINT32 X,UINT32 Y,UINT32 W,UINT32 H) {
+    EFI_GUID Guid=PJ4EDK2_ROTATE_GUID;
+    EFI_STATUS Status;
+    PJ4EDK2_ROTATE_PROTOCOL *Provider=NULL;
+    PJ4EDK2_ROTATE_REQUEST Request;
+    if (RotationDisabled) return EFI_UNSUPPORTED;
+    if (!DisplayRotator) {
+        Status=gBS->LocateProtocol(&Guid,NULL,(VOID **)&Provider);
+        if (EFI_ERROR(Status) || !Provider || Provider->revision!=PJ4EDK2_ROTATE_REVISION ||
+            Provider->size<sizeof(*Provider) || !Provider->rotate || !Provider->stop) {
+            RotationDisabled=TRUE;return EFI_UNSUPPORTED;
+        }
+        DisplayRotator=Provider;
+    }
+    Request=(PJ4EDK2_ROTATE_REQUEST){Source,SourceBytes,(UINTN)Width*4,Destination,DestinationBytes,
+        DestinationStride,Width,Height,X,Y,W,H};
+    Status=DisplayRotator->rotate(DisplayRotator,&Request);
+    // NOT_READY can decline small updates without disabling the provider.
+    if (EFI_ERROR(Status) && Status!=EFI_NOT_READY) RotationDisabled=TRUE;
+    return Status;
+}
 
 UINT32 pjb_display_rotation(VOID) {return DisplayPanelRotation;}
 
 UINTN pjb_display_stop(VOID) {
     EFI_STATUS Status;
+    if (DisplayRotator) {
+        Status=DisplayRotator->stop(DisplayRotator);
+        if (EFI_ERROR(Status)) return Status;
+        DisplayRotator=NULL;
+    }
+    RotationDisabled=FALSE;
     if (!DisplayModeLeased) return EFI_SUCCESS;
-    Status=DisplayGop->SetMode(DisplayGop,DisplayOriginalMode);
-    if (!EFI_ERROR(Status)) { DisplayModeLeased=FALSE;DisplayGop=NULL;DisplayPanelRotation=0; }
+    Status=DisplayOrientation && DisplayOrientation->prepare_handoff ?
+        DisplayOrientation->prepare_handoff(DisplayOrientation) : EFI_SUCCESS;
+    if (!EFI_ERROR(Status)) { DisplayModeLeased=FALSE;DisplayGop=NULL;DisplayOrientation=NULL;DisplayPanelRotation=0; }
     return Status;
 }
 
@@ -47,15 +80,12 @@ UINTN pjb_display_start(VOID) {
             UINT32 Rotation=Orientation->rotation(Orientation,Gop->Mode->Mode);
             if (Rotation!=0 && Rotation!=90) return EFI_UNSUPPORTED;
             DisplayPanelRotation=Rotation;
-            // GraphicsConsole may have chosen the landscape mode before us.
-            // The platform's compatibility mode, not the entry mode, is the
-            // required EFI handoff target in that case.
-            if (Gop->Mode->Mode!=Orientation->handoff_mode) {
-                DisplayGop=Gop;DisplayOriginalMode=Orientation->handoff_mode;DisplayModeLeased=TRUE;
-            }
+            DisplayOrientation=Orientation;
+            DisplayGop=Gop;DisplayModeLeased=TRUE;
         }
         return EFI_SUCCESS;
     }
+    DisplayOrientation=Orientation;
     for (Mode=0;Mode<Gop->Mode->MaxMode;++Mode) {
         Info=NULL;Size=0;
         Status=Gop->QueryMode(Gop,Mode,&Size,&Info);
@@ -68,14 +98,14 @@ UINTN pjb_display_start(VOID) {
             ((Info->HorizontalResolution==Width && Info->VerticalResolution==Height) || Swapped);
         if (Info) FreePool(Info);
         if (!Match) continue;
-        DisplayGop=Gop;DisplayOriginalMode=Orientation?Orientation->handoff_mode:Gop->Mode->Mode;DisplayModeLeased=TRUE;
+        DisplayGop=Gop;DisplayModeLeased=TRUE;
         DisplayPanelRotation=Swapped?90:0;
         Status=Gop->SetMode(Gop,Mode);
         if (!EFI_ERROR(Status)) return EFI_SUCCESS;
         /* Even a failing SetMode can have touched hardware. Keep the lease
-         * until rollback succeeds; a child must never inherit this failure. */
-        EFI_STATUS Restored=pjb_display_stop();
-        return EFI_ERROR(Restored)?Restored:Status;
+         * until a safe handoff succeeds; a child must never inherit this failure. */
+        EFI_STATUS Prepared=pjb_display_stop();
+        return EFI_ERROR(Prepared)?Prepared:Status;
     }
     return EFI_SUCCESS; /* Older firmware: retain the GOP BLT fallback. */
 }

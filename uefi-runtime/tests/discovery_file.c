@@ -15,8 +15,8 @@ VOID *EFIAPI CopyMem(VOID *d,CONST VOID *s,UINTN n) {copy(d,s,n);return d;}
 static UINTN cursor;
 static BOOLEAN corrupt;
 static EFI_STATUS EFIAPI scan_read(EFI_FILE_PROTOCOL *f,UINTN *n,VOID *out) {
-  CONST CHAR16 *names[]={L"BOOT",L"pj4edk2",L"Tools",L"Android",L"Debian"};
-  if(cursor==5){*n=0;return EFI_SUCCESS;}
+  CONST CHAR16 *names[]={L"BOOT",L"pj4edk2",L"Tools",L"PocketJS",L"Android",L"Debian"};
+  if(cursor==6){*n=0;return EFI_SUCCESS;}
   EFI_FILE_INFO *i=out;
   i->Size=SIZE_OF_EFI_FILE_INFO+(StrLen(names[cursor])+1)*sizeof(CHAR16);
   i->Attribute=EFI_FILE_DIRECTORY;

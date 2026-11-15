@@ -8,6 +8,7 @@ pub mod rotation;
 pub mod power;
 pub mod settings;
 pub mod discovery;
+pub mod event_queue;
 #[cfg(target_os = "none")]
 mod firmware;
 #[cfg(all(target_os = "none", feature = "settings-self-test"))]

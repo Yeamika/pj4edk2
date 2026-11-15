@@ -351,7 +351,7 @@ mod tests {
         assert!(repainted<u64::from(width)*u64::from(height)*2,"caret blink repainted {repainted} pixels");
     }
     #[test]
-    fn settings_shade_is_updated_only_when_its_visibility_or_opacity_changes() {
+    fn settings_backdrop_is_transparent_and_panel_remains_interactive() {
         let (width,height)=(1280,800);
         let mut vm=PocketJs::new(Config{width,height,tick_hz:30,js_heap_bytes:16*1024*1024,
             js_stack_bytes:512*1024,interrupt_polls:100_000,frame_buffer_budget:width as usize*height as usize*4}).unwrap();
@@ -359,18 +359,14 @@ mod tests {
             width,height,width as usize*4,PixelFormat::Argb8888).unwrap(),RendererId::SOFTWARE).unwrap();
         let mut config=pocketjs_boot_ui::default_config();config.viewport=[width,height];config.timeout_seconds=0;
         let page=BootPage::load(&mut vm,&config).unwrap();
-        vm.evaluate(page.generation,r#"globalThis.shadeWrites=0;
-            const savedProp=Rimuks.prop;
-            Rimuks.prop=(id,key,value)=>{if(id===Rimuks.settingsShade) shadeWrites++;return savedProp(id,key,value);};"#).unwrap();
-        page.tick(&mut vm,16,&[]).unwrap();
-        vm.evaluate(page.generation,"if(shadeWrites!==0) throw Error('hidden shade was redrawn');").unwrap();
+        vm.evaluate(page.generation,"if(Rimuks.settingsShade!==undefined) throw Error('backdrop shade exists');").unwrap();
         page.tick(&mut vm,32,&[UiEvent::Key{key:"F2".into()}]).unwrap();
         for now in (48..=1008).step_by(16) {page.tick(&mut vm,now,&[]).unwrap();}
-        vm.evaluate(page.generation,"if(shadeWrites===0) throw Error('opening shade did not update');shadeWrites=0;").unwrap();
-        page.tick(&mut vm,1024,&[]).unwrap();
-        vm.evaluate(page.generation,"if(shadeWrites!==0) throw Error('unchanged shade was redrawn');").unwrap();
+        vm.evaluate(page.generation,"if(!Rimuks.settingsOpen || Rimuks.settingsShade!==undefined) throw Error('settings did not open transparently');").unwrap();
+        page.tick(&mut vm,1024,&[UiEvent::Key{key:"Tab".into()}]).unwrap();
+        vm.evaluate(page.generation,"if(Rimuks.settingsFocus!==1) throw Error('settings keyboard focus failed');").unwrap();
         page.tick(&mut vm,1040,&[UiEvent::Key{key:"F2".into()}]).unwrap();
-        vm.evaluate(page.generation,"if(shadeWrites===0) throw Error('closing shade did not update');").unwrap();
+        vm.evaluate(page.generation,"if(Rimuks.settingsOpen) throw Error('settings did not close');").unwrap();
     }
     #[test]
     fn curve_is_reused_when_static_and_refreshed_for_animation_and_recreation() {

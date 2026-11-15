@@ -101,6 +101,7 @@ if len(config_bytes)>65536: raise ValueError('platform configuration too large')
 shutil.copy2(root.parent/'pocketjsforedk2/include/pocketjs_boot_context.h',pkg/'pocketjs_boot_context.h')
 shutil.copy2(root.parent/'pocketjsforedk2/include/pj4edk2_fastboot.h',pkg/'pj4edk2_fastboot.h')
 shutil.copy2(root.parent/'pocketjsforedk2/include/pj4edk2_display.h',pkg/'pj4edk2_display.h')
+shutil.copy2(root.parent/'pocketjsforedk2/include/pj4edk2_rotate.h',pkg/'pj4edk2_rotate.h')
 for name in ['Entry.c','TimeCompat.c','Chainload.c','Hardware.c','Settings.c','Discovery.c','Esp.h','Fastboot.c','Display.c']:
  shutil.copy2(root/'edk2'/name,pkg/name)
 (pkg/'PocketJs.inf').write_text('''[Defines]
