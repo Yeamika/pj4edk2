@@ -8,6 +8,7 @@
 | 显示描述协议 | `include/pj4edk2_boot_display.h` | 版本、编码、长度、几何与溢出校验 |
 | surface / 区域转换 | `include/pj4edk2_linux_display.h` | 将调用方已验证的 framebuffer 与逻辑输出区域转换为显示描述 |
 | initrd / PARTUUID | `include/pj4edk2_linux_chosen.h` | initrd 开区间与分区标识校验；不负责查找设备或挂载 rootfs |
+| 启动配置 | `include/pj4edk2_linux_config.h` | 有界 ASCII 配置解析与路径校验；文件读取、元数据与加载由消费端负责 |
 | DT 写入 | `include/pj4edk2_linux_fdt.h` | 使用调用方 libfdt 写入显示和 initrd 范围 |
 | 通用 EFI 桥接 | `edk2/DisplayBridge.c` | 校验线性 GOP 与保留 RAM，复制 DT 并启动 Linux EFI stub；子程序返回时恢复原表 |
 | 平台加载器 | 消费项目 | 镜像格式、固定地址、硬件状态、保留内存策略、watchdog 与直接内核入口 |
@@ -24,7 +25,7 @@ PARTUUID 校验函数不等于完整根分区启动链。实际属性写入、in
 
 ## 验证
 
-协议、initrd 和 surface 模型测试位于 `tests/`，合成 DT 生产端位于 `examples/`。
+协议、initrd、surface 和配置解析测试位于 `tests/`，合成 DT 生产端位于 `examples/`。
 通用 EFI 桥接的构建与启动环境由 QEMU ARM64 Small 分支提供。
 测试源码、编译成功、虚拟机启动和物理板级启动是不同验证范围；本次文档整理不新增执行结果。
 

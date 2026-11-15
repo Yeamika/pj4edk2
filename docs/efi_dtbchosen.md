@@ -7,6 +7,7 @@
 | --- | --- | --- |
 | initrd 内存范围 | `linux,initrd-start` / `linux,initrd-end` | Linux 内核 |
 | rootfs 分区 | `pj4edk2,root-partuuid` | 平台 initramfs |
+| 内核与系统启动参数 | `bootargs` | Linux 内核及根系统 init |
 | 显示描述 | `pocketjs,boot-display` | 早期 console / 对应显示驱动 |
 
 ## initrd
@@ -20,6 +21,14 @@ EFI 写入实际范围，Linux 定位 initrd；EFI 不执行发行版 rootfs 程
 PARTUUID 标识 GPT 分区，不是文件系统 UUID。`pj4edk2,root-partuuid` 是本项目定义的属性，不是 Devicetree 通用标准属性。
 公共层提供标识校验；加载器选择与写入、initramfs 等待块设备、身份检查及挂载仍属于消费项目。
 根目录子路径等扩展必须由双方显式约定，不能因为文档出现字段就假定已实现。
+
+## 启动配置与职责
+
+LinuxBoot EFI 可从 ESP 的配置选择载荷、根分区 PARTUUID 和启动参数。
+配置文件由 EFI 加载器消费；内核启动后通过上述 DT 属性交接，initramfs 不读取 ESP 配置。
+例如 `systemd.unit=graphical.target` 由根系统的 systemd 解释。内核须接受引导器 bootargs。
+显示接收端只消费显示描述与授权内存，不参与根分区选择或系统启动目标解释。
+修改这些启动选择不会改变 80 字节显示协议，也不要求重新打包 initramfs。
 
 ## 显示描述
 
