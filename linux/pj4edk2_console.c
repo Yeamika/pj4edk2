@@ -1,99 +1,115 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Built-in early printk receiver for coherent, reserved RAM scanout.
- * Register during console_init, collect text immediately, and render from the
- * core-init worker onward. Not a late initramfs module and not a tty/fbdev.
- * Platforms needing cache operations or MMIO use the terminal with their own
- * mapping/present/ownership adapter. */
-#include <linux/console.h>
-#include <linux/font.h>
+/* Generic fbcon adapter for an explicitly reserved, coherent RAM scanout.
+ * Platforms requiring cache/MMIO operations use pj4edk2_fbcon.h with their own
+ * ownership adapter. This adapter needs no board addresses or DPU knowledge. */
+#include <linux/aperture.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/libfdt.h>
 #include <linux/memblock.h>
 #include <linux/of_fdt.h>
-#include <linux/spinlock.h>
-#include <linux/workqueue.h>
-#define PJ4EDK_COLS 256
-#define PJ4EDK_ROWS 64
-#include "pj4edk2_terminal.h"
-static struct pj4edk_terminal text, frame;
-static struct pj4edk_shadow shadow;
-static struct pj4edk_damage damage;
-static DEFINE_RAW_SPINLOCK(text_lock);
-static bool owned, ready;
-static void render(struct work_struct *work);
-static DECLARE_WORK(render_work,render);
-static void render(struct work_struct *work)
+#include <linux/platform_device.h>
+#include "pj4edk2_fbcon.h"
+
+static unsigned int display_cells[PJ4EDK2_DISPLAY_CELLS];
+static struct fb_info *boot_fb;
+static void *boot_pixels;
+
+static int pj4edk2_scanout_probe(struct platform_device *pdev)
 {
-    unsigned long flags;
-    (void)work;
-    raw_spin_lock_irqsave(&text_lock,flags);
-    if(!owned) {raw_spin_unlock_irqrestore(&text_lock,flags);return;}
-    frame=text; text.dirty=0;
-    raw_spin_unlock_irqrestore(&text_lock,flags);
-    pj4edk_draw_damage(&frame,&shadow,&damage);
-    wmb(); /* Explicitly coherent RAM; no device-register writes here. */
-    raw_spin_lock_irqsave(&text_lock,flags);
-    if(owned && text.dirty) schedule_work(&render_work);
-    raw_spin_unlock_irqrestore(&text_lock,flags);
-}
-static void write_log(struct console *con,const char *s,unsigned int n)
-{
-    unsigned long flags;
-    (void)con;
-    raw_spin_lock_irqsave(&text_lock,flags);
-    if(owned) {
-        while(n--) pj4edk_character(&text,*s++);
-        if(ready) schedule_work(&render_work);
+    u64 address = ((u64)display_cells[2] << 32) | display_cells[3];
+    int ret;
+
+    boot_pixels = memremap(address, display_cells[4], MEMREMAP_WB);
+    if (!boot_pixels)
+        return -ENOMEM;
+    ret = devm_aperture_acquire_for_platform_device(pdev, address, display_cells[4]);
+    if (ret)
+        goto unmap;
+    boot_fb = pj4edk2_fbcon_register(&pdev->dev, THIS_MODULE, display_cells,
+                                    boot_pixels, display_cells[4], NULL, NULL);
+    if (IS_ERR(boot_fb)) {
+        ret = PTR_ERR(boot_fb);
+        boot_fb = NULL;
+        goto unmap;
     }
-    raw_spin_unlock_irqrestore(&text_lock,flags);
+    dev_info(&pdev->dev, "PJ4EDK2_HANDOFF PASS fbcon window %ux%u rotation=%u\n",
+             boot_fb->var.xres, boot_fb->var.yres, boot_fb->fbcon_rotate_hint * 90);
+    return 0;
+unmap:
+    memunmap(boot_pixels);
+    boot_pixels = NULL;
+    return ret;
 }
-static struct console log_console={.name="pj4edklog",.write=write_log,
-    .flags=CON_ENABLED|CON_PRINTBUFFER,.index=0};
-static int __init init_console(void)
+
+static void pj4edk2_scanout_remove(struct platform_device *pdev)
 {
-    const void *fdt=initial_boot_params,*wire;
+    pj4edk2_fbcon_unregister(boot_fb);
+    boot_fb = NULL;
+    memunmap(boot_pixels);
+    boot_pixels = NULL;
+}
+
+static struct platform_driver pj4edk2_scanout_driver = {
+    .probe = pj4edk2_scanout_probe,
+    .remove = pj4edk2_scanout_remove,
+    .driver = {.name = "pj4edk2-fbcon", .suppress_bind_attrs = true},
+};
+
+static int __init pj4edk2_console_init(void)
+{
+    const void *fdt = initial_boot_params, *wire;
     const fdt32_t *phandle;
     const fdt64_t *reg;
     struct memblock_region *r;
-    unsigned int cells[20];int chosen,node,parent,bytes;
-    unsigned long long address,end;
-    bool reserved=false;
-    void *pixels;
-    if(!fdt) return 0;
-    chosen=fdt_path_offset(fdt,"/chosen"); if(chosen<0) return 0;
-    wire=fdt_getprop(fdt,chosen,PJ4EDK2_DISPLAY_PROPERTY,&bytes);
-    if(!wire || !pj4edk2_display_decode_be(wire,bytes,cells)) return 0;
-    phandle=fdt_getprop(fdt,chosen,"pocketjs,boot-display-memory",&bytes);
-    if(!phandle || bytes!=4) return 0;
-    node=fdt_node_offset_by_phandle(fdt,fdt32_to_cpu(*phandle));
-    parent=fdt_path_offset(fdt,"/reserved-memory");
-    if(node<0 || parent<0 || fdt_parent_offset(fdt,node)!=parent ||
-       fdt_address_cells(fdt,parent)!=2 || fdt_size_cells(fdt,parent)!=2 ||
-       !fdt_getprop(fdt,node,"pocketjs,coherent-scanout",NULL) ||
-       fdt_getprop(fdt,node,"no-map",NULL) || fdt_getprop(fdt,node,"reusable",NULL)) return 0;
-    reg=fdt_getprop(fdt,node,"reg",&bytes);
-    address=((unsigned long long)cells[2]<<32)|cells[3];end=address+cells[4];
-    if(!reg || bytes!=16 || fdt64_ld(reg)!=address || fdt64_ld(reg+1)<cells[4]) return 0;
-    /* Full coverage, not memblock_is_region_reserved's intersection test. */
+    struct platform_device *pdev;
+    struct pj4edk2_fbcon_viewport view;
+    int chosen, node, parent, bytes, ret;
+    u64 address, end;
+    bool reserved = false;
+
+    if (!fdt)
+        return 0;
+    chosen = fdt_path_offset(fdt, "/chosen");
+    if (chosen < 0)
+        return 0;
+    wire = fdt_getprop(fdt, chosen, PJ4EDK2_DISPLAY_PROPERTY, &bytes);
+    if (!wire || !pj4edk2_display_decode_be(wire, bytes, display_cells) ||
+        !pj4edk2_fbcon_viewport(display_cells, &view))
+        return 0;
+    phandle = fdt_getprop(fdt, chosen, "pocketjs,boot-display-memory", &bytes);
+    if (!phandle || bytes != 4)
+        return 0;
+    node = fdt_node_offset_by_phandle(fdt, fdt32_to_cpu(*phandle));
+    parent = fdt_path_offset(fdt, "/reserved-memory");
+    if (node < 0 || parent < 0 || fdt_parent_offset(fdt, node) != parent ||
+        fdt_address_cells(fdt, parent) != 2 || fdt_size_cells(fdt, parent) != 2 ||
+        !fdt_getprop(fdt, node, "pocketjs,coherent-scanout", NULL) ||
+        fdt_getprop(fdt, node, "no-map", NULL) || fdt_getprop(fdt, node, "reusable", NULL))
+        return 0;
+    reg = fdt_getprop(fdt, node, "reg", &bytes);
+    address = ((u64)display_cells[2] << 32) | display_cells[3];
+    end = address + display_cells[4];
+    if (!reg || bytes != 16 || fdt64_ld(reg) != address ||
+        fdt64_ld(reg + 1) < display_cells[4] ||
+        !memblock_is_region_memory(address, display_cells[4]) ||
+        !memblock_is_map_memory(address))
+        return 0;
     for_each_reserved_mem_region(r)
-        if(r->base<=address && r->size>=end-r->base) reserved=true;
-    if(!reserved) return 0;
-    pixels=memremap(address,cells[4],MEMREMAP_WB);if(!pixels) return 0;
-    if(pj4edk_terminal_init_sized(&text,cells,pixels,font_vga_8x16.data,8,16)) {
-        memunmap(pixels);return 0;
+        if (r->base <= address && r->size >= end - r->base)
+            reserved = true;
+    if (!reserved)
+        return 0;
+    ret = platform_driver_register(&pj4edk2_scanout_driver);
+    if (ret)
+        return ret;
+    pdev = platform_device_register_simple("pj4edk2-fbcon", -1, NULL, 0);
+    if (IS_ERR(pdev)) {
+        platform_driver_unregister(&pj4edk2_scanout_driver);
+        return PTR_ERR(pdev);
     }
-    owned=true;register_console(&log_console);
-    pr_info("PJ4EDK2_HANDOFF PASS early retained framebuffer console %ux%u font=8x16\n",text.cols,text.rows);
     return 0;
 }
-console_initcall(init_console);
-static int __init start_renderer(void)
-{
-    unsigned long flags;
-    raw_spin_lock_irqsave(&text_lock,flags);ready=true;
-    if(owned) schedule_work(&render_work);
-    raw_spin_unlock_irqrestore(&text_lock,flags);
-    return 0;
-}
-core_initcall(start_renderer);
+/* fbmem is initialized at subsys_initcall; register before logo initdata is
+ * released. fbcon replays buffered printk through the normal tty console. */
+device_initcall(pj4edk2_console_init);

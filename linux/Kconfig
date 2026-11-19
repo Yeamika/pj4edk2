@@ -1,0 +1,11 @@
+config PJ4EDK2_BOOT_DISPLAY
+	bool "PJ4EDK2 retained framebuffer console"
+	depends on OF && FB && FRAMEBUFFER_CONSOLE
+	select APERTURE_HELPERS
+	select FB_SYSMEM_HELPERS
+	select FRAMEBUFFER_CONSOLE_ROTATION
+	help
+	  Use Linux fbcon in the boot-output window of an explicitly reserved,
+	  coherent RAM framebuffer. Include this adapter in the kernel to show
+	  the standard Linux logo before native DRM takes over the aperture.
+	  Noncoherent platforms use the shared fbcon helper from a board adapter.
