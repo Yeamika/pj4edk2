@@ -17,6 +17,7 @@
 #include "pocketjs_boot_context.h"
 #include "pj4edk2_linux_display.h"
 #include "pj4edk2_linux_fdt.h"
+#include "Progress.h"
 /* Prove full EFI reserved-memory coverage, including multiple descriptors. */
 STATIC BOOLEAN ReservedRam(UINT64 Base,UINT64 Bytes) {
   EFI_MEMORY_DESCRIPTOR *Map=NULL,*D; UINTN Size=0,Key,Step,Offset;
@@ -50,6 +51,7 @@ EFI_STATUS EFIAPI Pj4edk2BridgeMain(EFI_HANDLE Handle,EFI_SYSTEM_TABLE *System) 
   UINT32 Cells[20],Phandle; INT32 Reserved,Node,Chosen;
   struct pj4edk2_surface Surface; struct pj4edk2_region Region;
   fdt64_t Reg[2]; BOOLEAN Installed=FALSE;
+  PJ4EDK2_EFI_PROGRESS Progress={0};
   CopyMem(&DisplayGuid,&WireGuid,sizeof(DisplayGuid));
   for(Index=0;Index<System->NumberOfTableEntries;Index++) {
     EFI_CONFIGURATION_TABLE *T=&System->ConfigurationTable[Index];
@@ -86,11 +88,14 @@ EFI_STATUS EFIAPI Pj4edk2BridgeMain(EFI_HANDLE Handle,EFI_SYSTEM_TABLE *System) 
   if(Options[0]!=L'\\') {Status=EFI_INVALID_PARAMETER;goto Done;}
   Path=FileDevicePath(Self->DeviceHandle,Options);
   if(!Path) {Status=EFI_OUT_OF_RESOURCES;goto Done;}
+  if (!EFI_ERROR(Pj4edk2ProgressInit(&Progress,Gop,Cells[12],Cells[13],Cells[14],Cells[15])))
+    Pj4edk2ProgressLine(&Progress,L"Linux EFI: loading Linux EFI image");
   Status=gBS->LoadImage(FALSE,Handle,Path,NULL,0,&Image);
   if(EFI_ERROR(Status)) {if(Image)gBS->UnloadImage(Image);goto Done;}
   Status=gBS->HandleProtocol(Image,&gEfiLoadedImageProtocolGuid,(VOID **)&Child);
   if(EFI_ERROR(Status)) goto Unload;
   Child->LoadOptions=Command; Child->LoadOptionsSize=StrSize(Command);
+  Pj4edk2ProgressLine(&Progress,L"Linux EFI: preparing device tree");
   Dtb=AllocatePages(EFI_SIZE_TO_PAGES(fdt_totalsize(Original)+16384));
   if(!Dtb) {Status=EFI_OUT_OF_RESOURCES;goto Unload;}
   Status=EFI_VOLUME_CORRUPTED;
@@ -123,12 +128,15 @@ EFI_STATUS EFIAPI Pj4edk2BridgeMain(EFI_HANDLE Handle,EFI_SYSTEM_TABLE *System) 
   Status=gBS->InstallConfigurationTable(&gFdtTableGuid,Dtb);
   if(EFI_ERROR(Status)) goto Unload;
   Installed=TRUE;
-  /* No Print()/GOP mode changes: the PJ4EDK2 frame stays visible. */
+  Pj4edk2ProgressLine(&Progress,L"Linux EFI: starting Linux EFI image");
+  Pj4edk2ProgressClose(&Progress);
+  /* Keep the final progress frame, without changing the GOP mode. */
   Status=gBS->StartImage(Image,NULL,NULL);
   Image=NULL; /* Exit() may have unloaded a returning child. */
  Unload:
   if(Image) gBS->UnloadImage(Image);
  Done:
+  Pj4edk2ProgressClose(&Progress);
   if(Installed) {
     EFI_STATUS Restore=gBS->InstallConfigurationTable(&gFdtTableGuid,Original);
     if(EFI_ERROR(Restore)) CpuDeadLoop();

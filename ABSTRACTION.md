@@ -11,6 +11,7 @@
 | 启动配置 | `include/pj4edk2_linux_config.h` | 有界 ASCII 配置解析与路径校验；文件读取、元数据与加载由消费端负责 |
 | DT 写入 | `include/pj4edk2_linux_fdt.h` | 使用调用方 libfdt 写入显示和 initrd 范围 |
 | 通用 EFI 桥接 | `edk2/DisplayBridge.c` | 校验线性 GOP 与保留 RAM，复制 DT 并启动 Linux EFI stub；子程序返回时恢复原表 |
+| EFI 阶段显示 | `edk2/Progress.h` | 在给定 GOP 区域内用 HII 系统字体打印真实加载阶段；不负责内核 printk、显示模式或硬件初始化 |
 | 平台加载器 | 消费项目 | 镜像格式、固定地址、硬件状态、保留内存策略、watchdog 与直接内核入口 |
 
 ## 已实现与限制

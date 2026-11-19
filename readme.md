@@ -9,6 +9,7 @@
 - `include/pj4edk2_linux_config.h`：LinuxBoot 配置解析，校验路径、必填字段、重复项和长度；不读取文件系统或 GPT。
 - `include/pj4edk2_linux_fdt.h`：使用调用方 libfdt 写入显示描述和 initrd 范围。
 - `edk2/DisplayBridge.c`：通用 EDK II EFI 应用。读取 pj4edk2 BootDisplay 表和线性 GOP，验证 EFI reserved/WB 内存，将保留显示和区域写入复制的 DT，再启动 Linux EFI stub。
+- `edk2/Progress.h`：可选 EFI 阶段日志。在调用方给定的 GOP 区域内用 HII 系统字体原尺寸绘制，不切显示模式、不访问板级寄存器；退出 Boot Services 前释放临时内存，保留最后画面。
 
 桥接应用的 LoadOptions 为：`绝对 EFI 路径 空格 Linux 命令行`。只接受标准
 RGBX/BGRX 32 位 GOP 和完整 EFI reserved RAM，不处理 BLT-only GOP、任意 MMIO、
@@ -61,6 +62,11 @@ options=systemd.unit=graphical.target
 
 配置不是显示协议的一部分。EFI 通过 DT 传递 PARTUUID、initrd 地址和 bootargs；
 initramfs 挂载根分区，systemd 消费 `systemd.unit=`。公共显示接收端不读取 ESP 配置。
+
+EFI 阶段日志报告读取、校验和启动操作，不能当作 Linux printk。Linux 的早期消息先存入
+内核日志缓冲区，直到 fbcon 建立后才显示；企鹅也在 fbcon 阶段出现。缺少 HII 字体服务时
+EFI 日志可用性降低，不阻止系统启动。调用方必须在最后一次 GetMemoryMap 之前结束所有
+日志操作，ExitBootServices 成功后不得再调用 GOP、HII 或 Boot Services。
 
 ## 配置与协议验证边界
 
